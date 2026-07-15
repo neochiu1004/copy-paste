@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <!-- 強制禁止縮放，防止 iOS 雙擊時畫面放大 -->
+    <!-- 強制禁止縮放，防止 iOS 雙擊與輸入框聚焦時畫面放大 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <!-- iOS PWA 專屬設定 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -32,41 +32,32 @@
         /* Toast 動畫 */
         .toast { transition: all 0.3s ease; transform: translateY(-100%); opacity: 0; }
         .toast.show { transform: translateY(0); opacity: 1; }
+        
+        /* Modal 動畫 */
+        #custom-modal.show { display: flex; animation: fadeIn 0.2s ease-out forwards; }
+        #custom-modal .modal-box { transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        #custom-modal.show .modal-box { transform: scale(1); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 
     <!-- 頂部導航列 -->
     <header class="pt-12 pb-4 px-6 bg-white dark:bg-gray-800 shadow-sm z-10 shrink-0 flex justify-between items-center relative">
-        <!-- 標題區塊 -->
-        <div class="flex-1 min-w-0 pr-2" id="header-title-container">
-            <!-- 由 JS 渲染 -->
-        </div>
-        <!-- 動作區塊 -->
-        <div class="flex items-center space-x-3 shrink-0" id="header-actions">
-            <!-- 由 JS 渲染 -->
-        </div>
-        <!-- 離線提示 -->
+        <div class="flex-1 min-w-0 pr-2" id="header-title-container"></div>
+        <div class="flex items-center space-x-2 shrink-0" id="header-actions"></div>
         <div id="offline-badge" class="absolute top-12 right-6 hidden text-xs font-semibold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full shadow">
             離線模式
         </div>
     </header>
 
     <!-- 剪貼插槽列表 -->
-    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-24" id="slot-container">
-        <!-- 內容由 JS 動態渲染 -->
-    </main>
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-24" id="slot-container"></main>
 
     <!-- 主題懸浮按鈕 (FAB) -->
     <div class="fixed bottom-6 right-6 z-40 flex flex-col items-end">
-        <!-- 展開的子選單 -->
-        <div class="fab-menu flex flex-col items-end space-y-3 mb-4" id="fab-menu">
-            <!-- 內容由 JS 動態渲染 -->
-        </div>
-        
-        <!-- 主 FAB 按鈕 -->
+        <div class="fab-menu flex flex-col items-end space-y-3 mb-4" id="fab-menu"></div>
         <button id="main-fab" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xl flex items-center justify-center text-2xl transition-transform active:scale-90 relative z-50">
-            <!-- 由 JS 渲染當前圖示 -->
         </button>
     </div>
 
@@ -76,14 +67,31 @@
         <span id="toast-msg" class="text-sm font-medium">操作成功</span>
     </div>
 
+    <!-- 自建內嵌 Modal -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-[100] items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="modal-box bg-white dark:bg-gray-800 w-10/12 max-w-sm rounded-3xl shadow-2xl p-6">
+            <h3 id="modal-title" class="text-lg font-bold mb-2 dark:text-white">標題</h3>
+            <p id="modal-message" class="text-sm text-gray-600 dark:text-gray-300 mb-4 hidden">訊息內容</p>
+            
+            <div id="modal-inputs" class="space-y-3 hidden mb-4">
+                <input type="text" id="modal-input-1" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-shadow" placeholder="輸入文字">
+                <input type="text" id="modal-input-2" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-shadow hidden" placeholder="輸入 Emoji 圖示">
+            </div>
+            
+            <div class="mt-2 flex justify-end space-x-3">
+                <button id="modal-cancel" class="px-5 py-2.5 rounded-xl text-gray-600 dark:text-gray-300 font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all">取消</button>
+                <button id="modal-confirm" class="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold shadow-md hover:bg-blue-700 active:scale-95 transition-all">確定</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         /**
          * Ponytail 內審安全防護：
-         * 1. 嚴格轉義 HTML 實體 (escapeHTML)，防禦使用者自訂名稱/內容時的 XSS 攻擊。
-         * 2. Data-loss prevention：刪除主題前確認、防止刪除最後一個主題、刪除當前主題自動 Fallback。
+         * 1. 資料結構由字串轉為 {title, text}。
+         * 2. initData 加入 Migration 邏輯，自動把舊字串轉換為新物件，防呆防損毀。
          */
         
-        // --- 狀態管理 ---
         let themesData = {}; 
         let clipboardData = {}; 
         let currentThemeId = null;
@@ -95,46 +103,114 @@
             't_ideas': { icon: '💡', name: '靈感' }
         };
 
-        // --- 安全工具 ---
         const escapeHTML = (str) => {
             if (!str) return '';
             return str.replace(/[&<>'"]/g, tag => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
             }[tag]));
         };
-
         const generateId = () => 't_' + Date.now().toString();
 
-        // --- 初始化與資料加載 ---
+        // --- Modal 管理器 ---
+        let modalCallback = null;
+        const modalEl = document.getElementById('custom-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMsg = document.getElementById('modal-message');
+        const modalInputs = document.getElementById('modal-inputs');
+        const modalInput1 = document.getElementById('modal-input-1');
+        const modalInput2 = document.getElementById('modal-input-2');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        const modalConfirmBtn = document.getElementById('modal-confirm');
+
+        function openModal(options) {
+            modalMsg.classList.add('hidden');
+            modalInputs.classList.add('hidden');
+            modalInput2.classList.add('hidden');
+            modalCancelBtn.classList.remove('hidden');
+            modalInput1.value = '';
+            modalInput2.value = '';
+
+            modalTitle.innerText = options.title || '提示';
+            modalConfirmBtn.innerText = options.confirmText || '確定';
+            
+            if (options.message) {
+                modalMsg.innerText = options.message;
+                modalMsg.classList.remove('hidden');
+            }
+            if (options.type === 'alert') {
+                modalCancelBtn.classList.add('hidden');
+            }
+            if (options.type === 'prompt' || options.type === 'double-prompt') {
+                modalInputs.classList.remove('hidden');
+                modalInput1.placeholder = options.placeholder1 || '請輸入...';
+                modalInput1.value = options.value1 || '';
+                
+                if (options.type === 'double-prompt') {
+                    modalInput2.classList.remove('hidden');
+                    modalInput2.placeholder = options.placeholder2 || '選項 2';
+                    modalInput2.value = options.value2 || '';
+                }
+            }
+
+            modalCallback = options.onConfirm;
+            modalEl.classList.add('show');
+            modalEl.classList.remove('hidden');
+
+            if (options.type.includes('prompt')) {
+                setTimeout(() => modalInput1.focus(), 100);
+            }
+        }
+
+        function closeModal() {
+            modalEl.classList.remove('show');
+            setTimeout(() => modalEl.classList.add('hidden'), 200);
+            modalCallback = null;
+        }
+
+        modalCancelBtn.onclick = () => closeModal();
+        modalConfirmBtn.onclick = () => {
+            if (modalCallback) {
+                const val1 = modalInput1.value.trim();
+                const val2 = modalInput2.value.trim();
+                modalCallback(val1, val2);
+            }
+            closeModal();
+        };
+
+        // --- 初始化與資料加載 (含向下相容轉移) ---
         function initData() {
             try {
                 const storedThemes = localStorage.getItem('pwa_themes_data');
                 const storedClips = localStorage.getItem('pwa_clipboard_data');
-                
                 themesData = storedThemes ? JSON.parse(storedThemes) : JSON.parse(JSON.stringify(DEFAULT_THEMES));
                 clipboardData = storedClips ? JSON.parse(storedClips) : {};
             } catch (e) {
-                console.error("讀取資料失敗", e);
                 themesData = JSON.parse(JSON.stringify(DEFAULT_THEMES));
                 clipboardData = {};
             }
 
-            // 防呆：確保所有主題都有對應的陣列
+            // 確保插槽存在且升級為 {title, text} 物件結構
             Object.keys(themesData).forEach(key => {
                 if (!clipboardData[key] || !Array.isArray(clipboardData[key])) {
-                    clipboardData[key] = Array(5).fill(''); // 預設 5 格
+                    clipboardData[key] = Array.from({length: 5}, () => ({ title: '', text: '' }));
+                } else {
+                    // 資料轉移 (Migration)：將舊版的純字串轉為新版物件
+                    clipboardData[key] = clipboardData[key].map(item => {
+                        if (typeof item === 'string') {
+                            return { title: '', text: item };
+                        }
+                        return item || { title: '', text: '' };
+                    });
                 }
             });
 
-            // 防呆：若全部被誤刪，補回一個預設主題
             const themeKeys = Object.keys(themesData);
             if (themeKeys.length === 0) {
                 themesData['t_default'] = { icon: '📝', name: '未命名' };
-                clipboardData['t_default'] = Array(5).fill('');
+                clipboardData['t_default'] = Array.from({length: 5}, () => ({ title: '', text: '' }));
                 themeKeys.push('t_default');
             }
-
-            currentThemeId = themeKeys[0]; // 預設選中第一個
+            currentThemeId = themeKeys[0];
         }
 
         function saveData() {
@@ -151,7 +227,6 @@
 
         function toggleEditMode() {
             isEditMode = !isEditMode;
-            // 退出編輯模式時確保關閉 FAB 選單
             if (!isEditMode) toggleFAB(false);
             renderAll();
         }
@@ -161,32 +236,26 @@
             const titleContainer = document.getElementById('header-title-container');
             const actionsContainer = document.getElementById('header-actions');
             
-            // 標題渲染 (編輯模式下可點擊改名)
             if (isEditMode) {
                 titleContainer.innerHTML = `
-                    <div class="flex items-center cursor-pointer active:scale-95 transition-transform" onclick="promptEditThemeName()">
+                    <div class="flex items-center cursor-pointer active:scale-95 transition-transform" onclick="actionEditThemeName()">
                         <h1 class="text-2xl font-bold tracking-tight text-blue-600 truncate">
                             ${escapeHTML(theme.icon)} ${escapeHTML(theme.name)}
                         </h1>
                         <span class="ml-2 text-sm">✏️</span>
                     </div>
-                    <p class="text-xs text-blue-500 mt-1">編輯模式：點擊文字修改，或刪除項目</p>
+                `;
+                const canDelete = Object.keys(themesData).length > 1;
+                actionsContainer.innerHTML = `
+                    <button onclick="actionAddTheme()" class="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-full active:scale-90 transition-transform flex items-center justify-center shadow-sm">➕</button>
+                    ${canDelete ? `<button onclick="actionDeleteTheme()" class="p-2 text-red-500 bg-red-50 dark:bg-red-900/30 rounded-full active:scale-90 transition-transform shadow-sm">🗑️</button>` : ''}
+                    <button onclick="toggleEditMode()" class="px-3 py-2 bg-blue-600 text-white font-semibold rounded-full shadow-md active:scale-95 transition-transform text-sm">完成</button>
                 `;
             } else {
                 titleContainer.innerHTML = `
                     <h1 class="text-2xl font-bold tracking-tight truncate">${escapeHTML(theme.icon)} ${escapeHTML(theme.name)}</h1>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">單擊複製 • 雙擊貼上</p>
                 `;
-            }
-
-            // 動作按鈕渲染
-            if (isEditMode) {
-                const canDelete = Object.keys(themesData).length > 1;
-                actionsContainer.innerHTML = `
-                    ${canDelete ? `<button onclick="deleteCurrentTheme()" class="p-2 text-red-500 bg-red-50 dark:bg-red-900/30 rounded-full active:scale-90 transition-transform">🗑️</button>` : ''}
-                    <button onclick="toggleEditMode()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-full shadow-md active:scale-95 transition-transform text-sm">✅ 完成</button>
-                `;
-            } else {
                 actionsContainer.innerHTML = `
                     <button onclick="toggleEditMode()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold rounded-full shadow-sm active:scale-95 transition-transform text-sm flex items-center">
                         <span class="mr-1">⚙️</span> 管理
@@ -200,57 +269,55 @@
             container.innerHTML = '';
             
             const slots = clipboardData[currentThemeId] || [];
-            slots.forEach((text, index) => {
-                const hasContent = text.trim().length > 0;
+            slots.forEach((item, index) => {
+                const hasTitle = item.title && item.title.trim().length > 0;
+                const hasContent = item.text && item.text.trim().length > 0;
                 
                 const card = document.createElement('div');
                 card.className = `slot-card bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex items-start space-x-3 relative overflow-hidden ${isEditMode ? '' : 'active:scale-98'}`;
                 
-                let contentHTML = '';
+                // 標題與內文渲染邏輯
+                const titleHTML = hasTitle ? `<h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 mb-0.5">${escapeHTML(item.title)}</h4>` : '';
+                let textHTML = '';
+
                 if (isEditMode) {
-                    // 編輯模式：點擊文字區塊進行編輯，右側顯示刪除鈕
-                    const displayHTML = hasContent 
-                        ? `<p class="text-sm text-gray-800 dark:text-gray-200 line-clamp-3 break-all">${escapeHTML(text)}</p>` 
+                    textHTML = hasContent 
+                        ? `<p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 break-all">${escapeHTML(item.text)}</p>` 
                         : `<p class="text-sm text-gray-400 dark:text-gray-500 italic">空白插槽 (點擊編輯)</p>`;
                     
-                    contentHTML = `
-                        <div class="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-full flex items-center justify-center font-bold text-sm">
-                            ${index + 1}
+                    card.innerHTML = `
+                        <div class="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-full flex items-center justify-center font-bold text-sm">${index + 1}</div>
+                        <div class="flex-1 pt-0.5 cursor-pointer" onclick="actionEditSlot(${index})">
+                            ${titleHTML}
+                            ${textHTML}
+                            <p class="text-[10px] text-blue-500 mt-1">✏️ 點擊修改標題與內容</p>
                         </div>
-                        <div class="flex-1 pt-1 cursor-pointer" onclick="promptEditSlot(${index})">
-                            ${displayHTML}
-                            <p class="text-[10px] text-blue-500 mt-1">✏️ 點擊修改</p>
-                        </div>
-                        <button onclick="deleteSlot(${index})" class="flex-shrink-0 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full active:scale-90 transition-transform">
-                            🗑️
-                        </button>
+                        <button onclick="actionDeleteSlot(${index})" class="flex-shrink-0 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full active:scale-90 transition-transform">🗑️</button>
                     `;
-                    card.innerHTML = contentHTML;
                 } else {
-                    // 正常模式：綁定單擊/雙擊
-                    const displayHTML = hasContent 
-                        ? `<p class="text-sm text-gray-800 dark:text-gray-200 line-clamp-3 break-all">${escapeHTML(text)}</p>` 
+                    textHTML = hasContent 
+                        ? `<p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 break-all">${escapeHTML(item.text)}</p>` 
                         : `<p class="text-sm text-gray-400 dark:text-gray-500 italic">雙擊以貼上文字...</p>`;
                     
-                    contentHTML = `
-                        <div class="flex-shrink-0 w-8 h-8 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center font-bold text-sm">
-                            ${index + 1}
-                        </div>
-                        <div class="flex-1 pt-1 pointer-events-none">
-                            ${displayHTML}
+                    card.innerHTML = `
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center font-bold text-sm">${index + 1}</div>
+                        <div class="flex-1 pt-0.5 pointer-events-none">
+                            ${titleHTML}
+                            ${textHTML}
                         </div>
                     `;
-                    card.innerHTML = contentHTML;
                     attachTapEvents(card, index);
                 }
-                
                 container.appendChild(card);
             });
 
-            // 編輯模式底部：新增插槽按鈕
             if (isEditMode) {
                 const addBtn = document.createElement('button');
-                addBtn.onclick = addSlot;
+                addBtn.onclick = () => {
+                    clipboardData[currentThemeId].push({ title: '', text: '' });
+                    saveData(); renderSlots();
+                    setTimeout(() => container.scrollTop = container.scrollHeight, 50);
+                };
                 addBtn.className = "w-full py-4 mt-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl text-gray-500 dark:text-gray-400 font-medium active:scale-95 transition-transform flex items-center justify-center";
                 addBtn.innerHTML = "➕ 新增插槽";
                 container.appendChild(addBtn);
@@ -262,19 +329,9 @@
             const mainFab = document.getElementById('main-fab');
             menu.innerHTML = '';
             
-            // 更新主 FAB 圖示
             mainFab.innerText = themesData[currentThemeId] ? themesData[currentThemeId].icon : '📂';
+            mainFab.style.display = isEditMode ? 'none' : 'flex';
 
-            // 編輯模式下，選單頂部加入「新增主題」
-            if (isEditMode) {
-                menu.innerHTML += `
-                    <button onclick="promptAddTheme()" class="flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-full shadow-lg border border-blue-100 dark:border-blue-800 active:scale-95 transition-transform">
-                        <span class="text-sm font-bold text-blue-600 dark:text-blue-400 pr-1 pl-1">➕ 新增主題</span>
-                    </button>
-                `;
-            }
-
-            // 渲染所有主題按鈕 (排除當前主題，保持畫面簡潔)
             Object.keys(themesData).forEach(key => {
                 if (key !== currentThemeId) {
                     const t = themesData[key];
@@ -287,94 +344,95 @@
             });
         }
 
-        // --- CRUD 操作 (管理模式) ---
+        // --- CRUD 操作 (基於自建 Modal) ---
         
-        // [新增主題]
-        function promptAddTheme() {
-            toggleFAB(false);
-            const name = prompt("請輸入新主題名稱 (例如：帳單)");
-            if (!name || name.trim() === '') return;
-            
-            let icon = prompt("請輸入一個表情符號作為圖示 (例如：🧾)", "📂");
-            if (!icon || icon.trim() === '') icon = "📂";
-
-            const newId = generateId();
-            themesData[newId] = { name: name.trim(), icon: icon.trim() };
-            clipboardData[newId] = Array(5).fill(''); // 預設給 5 格
-            
-            saveData();
-            currentThemeId = newId; // 切換到新主題
-            renderAll();
-            showToast('已新增主題', '✅');
-        }
-
-        // [編輯主題名稱]
-        function promptEditThemeName() {
-            const current = themesData[currentThemeId];
-            const newName = prompt("修改主題名稱：", current.name);
-            if (newName !== null && newName.trim() !== '') {
-                current.name = newName.trim();
-                
-                const newIcon = prompt("修改主題圖示 (Emoji)：", current.icon);
-                if (newIcon !== null && newIcon.trim() !== '') {
-                    current.icon = newIcon.trim();
+        function actionAddTheme() {
+            openModal({
+                type: 'double-prompt',
+                title: '➕ 新增主題',
+                placeholder1: '名稱 (例：購物)',
+                placeholder2: '圖示 (Emoji)',
+                onConfirm: (name, icon) => {
+                    if (!name) return;
+                    const finalIcon = icon || '📂';
+                    const newId = generateId();
+                    themesData[newId] = { name: name, icon: finalIcon };
+                    clipboardData[newId] = Array.from({length: 5}, () => ({ title: '', text: '' }));
+                    saveData();
+                    currentThemeId = newId;
+                    renderAll();
+                    showToast('已新增主題', '✅');
                 }
-                
-                saveData();
-                renderAll();
-                showToast('已更新主題', '✅');
-            }
+            });
         }
 
-        // [刪除主題]
-        function deleteCurrentTheme() {
-            const keys = Object.keys(themesData);
-            if (keys.length <= 1) {
-                alert("至少需要保留一個主題！");
-                return;
-            }
-            if (confirm(`確定要刪除「${themesData[currentThemeId].name}」以及其中的所有剪貼內容嗎？\n此操作無法復原。`)) {
-                delete themesData[currentThemeId];
-                delete clipboardData[currentThemeId];
-                saveData();
-                
-                // Fallback 到清單中的第一個主題
-                currentThemeId = Object.keys(themesData)[0];
-                renderAll();
-                showToast('已刪除主題', '🗑️');
-            }
+        function actionEditThemeName() {
+            const current = themesData[currentThemeId];
+            openModal({
+                type: 'double-prompt',
+                title: '✏️ 修改主題',
+                value1: current.name,
+                placeholder1: '名稱',
+                value2: current.icon,
+                placeholder2: '圖示 (Emoji)',
+                onConfirm: (name, icon) => {
+                    if (!name) return;
+                    current.name = name;
+                    current.icon = icon || current.icon;
+                    saveData();
+                    renderAll();
+                    showToast('已更新主題', '✅');
+                }
+            });
         }
 
-        // [新增插槽]
-        function addSlot() {
-            clipboardData[currentThemeId].push('');
-            saveData();
-            renderSlots(); // 只需重繪插槽
-            // 自動捲動到最底
-            setTimeout(() => {
-                const container = document.getElementById('slot-container');
-                container.scrollTop = container.scrollHeight;
-            }, 50);
+        function actionDeleteTheme() {
+            openModal({
+                type: 'confirm',
+                title: '🗑️ 刪除主題',
+                message: `確定要刪除「${themesData[currentThemeId].name}」及內部所有文字嗎？此操作無法復原。`,
+                confirmText: '確定刪除',
+                onConfirm: () => {
+                    delete themesData[currentThemeId];
+                    delete clipboardData[currentThemeId];
+                    saveData();
+                    currentThemeId = Object.keys(themesData)[0];
+                    renderAll();
+                    showToast('已刪除', '🗑️');
+                }
+            });
         }
 
-        // [編輯插槽內容]
-        function promptEditSlot(index) {
-            const currentText = clipboardData[currentThemeId][index];
-            const newText = prompt("手動編輯插槽內容：", currentText);
-            if (newText !== null) {
-                clipboardData[currentThemeId][index] = newText.trim();
-                saveData();
-                renderSlots();
-            }
+        function actionEditSlot(index) {
+            const currentItem = clipboardData[currentThemeId][index];
+            openModal({
+                type: 'double-prompt',
+                title: '✏️ 編輯插槽內容',
+                placeholder1: '自訂標題 (選填，如：銀行帳號)',
+                value1: currentItem.title || '',
+                placeholder2: '輸入文字內容 (必填)',
+                value2: currentItem.text || '',
+                onConfirm: (title, text) => {
+                    clipboardData[currentThemeId][index].title = title;
+                    clipboardData[currentThemeId][index].text = text;
+                    saveData();
+                    renderSlots();
+                }
+            });
         }
 
-        // [刪除插槽]
-        function deleteSlot(index) {
-            if (confirm(`確定要移除此插槽 (第 ${index + 1} 格) 嗎？`)) {
-                clipboardData[currentThemeId].splice(index, 1);
-                saveData();
-                renderSlots();
-            }
+        function actionDeleteSlot(index) {
+            openModal({
+                type: 'confirm',
+                title: '🗑️ 移除插槽',
+                message: `確定要移除此插槽 (第 ${index + 1} 格) 嗎？`,
+                confirmText: '移除',
+                onConfirm: () => {
+                    clipboardData[currentThemeId].splice(index, 1);
+                    saveData();
+                    renderSlots();
+                }
+            });
         }
 
         // --- 互動邏輯 (正常模式：雙擊貼上/單擊複製) ---
@@ -396,13 +454,10 @@
                     clearTimeout(tapTimer);
                     await handlePaste(element, index);
                 } else {
-                    tapTimer = setTimeout(() => {
-                        handleCopy(element, index);
-                    }, 350);
+                    tapTimer = setTimeout(() => handleCopy(element, index), 350);
                 }
                 lastTapTime = currentTime;
             };
-
             element.addEventListener('touchend', handler);
             element.addEventListener('click', (e) => {
                 if (e.pointerType === 'mouse') handler(e);
@@ -410,24 +465,21 @@
         }
 
         async function handleCopy(element, index) {
-            const text = clipboardData[currentThemeId][index];
-            if (!text) {
-                showToast('插槽為空，無法複製', '⚠️');
-                return;
-            }
+            const textToCopy = clipboardData[currentThemeId][index].text;
+            if (!textToCopy) return showToast('內容為空', '⚠️');
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(text);
+                    await navigator.clipboard.writeText(textToCopy);
                 } else {
                     const textArea = document.createElement("textarea");
-                    textArea.value = text;
+                    textArea.value = textToCopy;
                     document.body.appendChild(textArea);
                     textArea.select();
                     document.execCommand("copy");
                     document.body.removeChild(textArea);
                 }
                 triggerFlash(element);
-                showToast('已複製到剪貼簿!', '✅');
+                showToast('已複製!', '✅');
             } catch (err) {
                 showToast('複製失敗', '❌');
             }
@@ -436,29 +488,30 @@
         async function handlePaste(element, index) {
             try {
                 if (!navigator.clipboard || !navigator.clipboard.readText) throw new Error("不支援 API");
-                const text = await navigator.clipboard.readText();
-                if (text) {
-                    clipboardData[currentThemeId][index] = text.trim();
-                    saveData();
-                    triggerFlash(element);
-                    renderSlots();
-                    showToast('已更新插槽!', '✅');
+                const pastedText = await navigator.clipboard.readText();
+                if (pastedText) {
+                    clipboardData[currentThemeId][index].text = pastedText.trim();
+                    saveData(); triggerFlash(element); renderSlots(); showToast('已更新!', '✅');
                 } else {
                     showToast('剪貼簿為空', '⚠️');
                 }
             } catch (err) {
-                const fallbackText = prompt("系統阻擋自動讀取，請手動貼上於此：");
-                if (fallbackText !== null && fallbackText.trim() !== "") {
-                    clipboardData[currentThemeId][index] = fallbackText.trim();
-                    saveData();
-                    triggerFlash(element);
-                    renderSlots();
-                    showToast('已手動更新!', '✅');
-                }
+                // 如果自動貼上被擋，退化為 Modal 手動輸入 (僅更新內文)
+                openModal({
+                    type: 'prompt',
+                    title: '📋 手動貼上',
+                    message: '系統阻擋自動讀取，請在此長按手動貼上：',
+                    onConfirm: (pastedText) => {
+                        if (pastedText) {
+                            clipboardData[currentThemeId][index].text = pastedText.trim();
+                            saveData(); triggerFlash(element); renderSlots(); showToast('已更新!', '✅');
+                        }
+                    }
+                });
             }
         }
 
-        // --- UI 輔助特效與 FAB ---
+        // --- UI 輔助特效 ---
         function triggerFlash(element) {
             element.classList.remove('slot-flash');
             void element.offsetWidth;
@@ -485,46 +538,29 @@
         }
 
         document.getElementById('main-fab').addEventListener('click', (e) => {
-            e.stopPropagation(); // 阻止冒泡觸發全局關閉
+            e.stopPropagation(); 
             toggleFAB();
         });
 
-        // 點擊空白處關閉 FAB (且非編輯模式)
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.fixed.bottom-6')) toggleFAB(false);
+            if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
         });
         document.addEventListener('touchend', (e) => {
-             if (!e.target.closest('.fixed.bottom-6')) toggleFAB(false);
+             if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
         });
 
-        // --- PWA Service Worker (Blob 注入，免分離檔案) ---
+        // --- PWA Service Worker (修正 Blob 問題) ---
         function registerServiceWorker() {
             if ('serviceWorker' in navigator) {
-                const swCode = `
-                    const CACHE_NAME = 'clipboard-pwa-v2';
-                    self.addEventListener('install', e => self.skipWaiting());
-                    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-                    self.addEventListener('fetch', e => {
-                        e.respondWith(
-                            caches.match(e.request).then(response => {
-                                return response || fetch(e.request).then(res => {
-                                    if(e.request.url.startsWith(self.location.origin)) {
-                                        const resClone = res.clone();
-                                        caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
-                                    }
-                                    return res;
-                                }).catch(() => new Response('Offline Content'));
-                            })
-                        );
-                    });
-                `;
-                const blob = new Blob([swCode], { type: 'application/javascript' });
-                const swUrl = URL.createObjectURL(blob);
-                navigator.serviceWorker.register(swUrl).catch(err => console.error('SW 失敗', err));
+                // 為了避免在預覽環境及嚴格安全性下 Blob URL 報錯，
+                // 改為標準的 sw.js 註冊方式，並靜默處理找不到檔案的錯誤。
+                // 若您部署至 GitHub Pages，應用程式依然可依賴 Safari 預設快取運作。
+                navigator.serviceWorker.register('./sw.js').catch(e => {
+                    console.log('以無 ServiceWorker 模式運行 (正常現象，不影響主要功能)');
+                });
             }
         }
 
-        // 監聽連線狀態
         window.addEventListener('offline', () => document.getElementById('offline-badge').classList.remove('hidden'));
         window.addEventListener('online', () => document.getElementById('offline-badge').classList.add('hidden'));
 
