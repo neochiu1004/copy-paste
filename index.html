@@ -51,7 +51,7 @@
         </div>
     </header>
 
-    <!-- 剪貼插槽列表 -->
+    <!-- 剪貼插槽列表與主題管理區域 -->
     <main class="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-24" id="slot-container"></main>
 
     <!-- 主題懸浮按鈕 (FAB) -->
@@ -86,14 +86,9 @@
     </div>
 
     <script>
-        /**
-         * Ponytail 內審安全防護：
-         * 1. 資料結構由字串轉為 {title, text}。
-         * 2. initData 加入 Migration 邏輯，自動把舊字串轉換為新物件，防呆防損毀。
-         */
-        
         let themesData = {}; 
         let clipboardData = {}; 
+        let themeOrder = [];
         let currentThemeId = null;
         let isEditMode = false;
 
@@ -177,45 +172,60 @@
             closeModal();
         };
 
-        // --- 初始化與資料加載 (含向下相容轉移) ---
+        // --- 初始化與資料加載 (含排序與記憶功能) ---
         function initData() {
             try {
                 const storedThemes = localStorage.getItem('pwa_themes_data');
                 const storedClips = localStorage.getItem('pwa_clipboard_data');
+                const storedOrder = localStorage.getItem('pwa_theme_order');
+                
                 themesData = storedThemes ? JSON.parse(storedThemes) : JSON.parse(JSON.stringify(DEFAULT_THEMES));
                 clipboardData = storedClips ? JSON.parse(storedClips) : {};
+                themeOrder = storedOrder ? JSON.parse(storedOrder) : [];
             } catch (e) {
                 themesData = JSON.parse(JSON.stringify(DEFAULT_THEMES));
                 clipboardData = {};
+                themeOrder = [];
             }
 
-            // 確保插槽存在且升級為 {title, text} 物件結構
+            // 確保資料轉移與順序清單完整
             Object.keys(themesData).forEach(key => {
                 if (!clipboardData[key] || !Array.isArray(clipboardData[key])) {
                     clipboardData[key] = Array.from({length: 5}, () => ({ title: '', text: '' }));
                 } else {
-                    // 資料轉移 (Migration)：將舊版的純字串轉為新版物件
                     clipboardData[key] = clipboardData[key].map(item => {
-                        if (typeof item === 'string') {
-                            return { title: '', text: item };
-                        }
+                        if (typeof item === 'string') return { title: '', text: item };
                         return item || { title: '', text: '' };
                     });
                 }
+                if (!themeOrder.includes(key)) {
+                    themeOrder.push(key);
+                }
             });
 
-            const themeKeys = Object.keys(themesData);
-            if (themeKeys.length === 0) {
+            // 過濾已被刪除的主題 ID
+            themeOrder = themeOrder.filter(key => themesData[key]);
+
+            if (themeOrder.length === 0) {
                 themesData['t_default'] = { icon: '📝', name: '未命名' };
                 clipboardData['t_default'] = Array.from({length: 5}, () => ({ title: '', text: '' }));
-                themeKeys.push('t_default');
+                themeOrder = ['t_default'];
             }
-            currentThemeId = themeKeys[0];
+
+            // 自動載入上次開啟的主題 (若無效則載入順序第一個)
+            const lastTheme = localStorage.getItem('pwa_last_theme');
+            if (lastTheme && themesData[lastTheme]) {
+                currentThemeId = lastTheme;
+            } else {
+                currentThemeId = themeOrder[0];
+            }
         }
 
         function saveData() {
             localStorage.setItem('pwa_themes_data', JSON.stringify(themesData));
             localStorage.setItem('pwa_clipboard_data', JSON.stringify(clipboardData));
+            localStorage.setItem('pwa_theme_order', JSON.stringify(themeOrder));
+            localStorage.setItem('pwa_last_theme', currentThemeId);
         }
 
         // --- 核心 UI 渲染 ---
@@ -245,7 +255,7 @@
                         <span class="ml-2 text-sm">✏️</span>
                     </div>
                 `;
-                const canDelete = Object.keys(themesData).length > 1;
+                const canDelete = themeOrder.length > 1;
                 actionsContainer.innerHTML = `
                     <button onclick="actionAddTheme()" class="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-full active:scale-90 transition-transform flex items-center justify-center shadow-sm">➕</button>
                     ${canDelete ? `<button onclick="actionDeleteTheme()" class="p-2 text-red-500 bg-red-50 dark:bg-red-900/30 rounded-full active:scale-90 transition-transform shadow-sm">🗑️</button>` : ''}
@@ -267,6 +277,46 @@
         function renderSlots() {
             const container = document.getElementById('slot-container');
             container.innerHTML = '';
+
+            // 管理模式下，頂部渲染專案拖曳排序區塊
+            if (isEditMode) {
+                const orderSection = document.createElement('div');
+                orderSection.className = "bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-4";
+                orderSection.innerHTML = `
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center justify-between">
+                        <span>📂 專案排序 (按住 ☰ 拖曳調整)</span>
+                    </h3>
+                    <div id="theme-sort-list" class="space-y-2"></div>
+                `;
+                container.appendChild(orderSection);
+
+                const sortList = orderSection.querySelector('#theme-sort-list');
+                themeOrder.forEach((tId, idx) => {
+                    const t = themesData[tId];
+                    const isCurrent = tId === currentThemeId;
+                    const item = document.createElement('div');
+                    item.className = `flex items-center justify-between p-2.5 rounded-xl border ${isCurrent ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30' : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50'}`;
+                    item.dataset.index = idx;
+                    item.dataset.id = tId;
+                    item.innerHTML = `
+                        <div class="flex items-center space-x-2 cursor-pointer flex-1 min-w-0" onclick="switchTheme('${tId}')">
+                            <span class="text-lg">${escapeHTML(t.icon)}</span>
+                            <span class="text-sm font-semibold truncate ${isCurrent ? 'text-blue-600 dark:text-blue-400' : ''}">${escapeHTML(t.name)}</span>
+                            ${isCurrent ? '<span class="text-[10px] bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-bold">目前</span>' : ''}
+                        </div>
+                        <div class="drag-handle px-3 py-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 select-none text-lg touch-none">
+                            ☰
+                        </div>
+                    `;
+                    attachDragEvents(item, idx);
+                    sortList.appendChild(item);
+                });
+
+                const divider = document.createElement('div');
+                divider.className = "text-xs font-bold uppercase tracking-wider text-gray-400 my-2";
+                divider.innerText = "📋 當前專案插槽編輯";
+                container.appendChild(divider);
+            }
             
             const slots = clipboardData[currentThemeId] || [];
             slots.forEach((item, index) => {
@@ -276,7 +326,6 @@
                 const card = document.createElement('div');
                 card.className = `slot-card bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex items-start space-x-3 relative overflow-hidden ${isEditMode ? '' : 'active:scale-98'}`;
                 
-                // 標題與內文渲染邏輯
                 const titleHTML = hasTitle ? `<h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 mb-0.5">${escapeHTML(item.title)}</h4>` : '';
                 let textHTML = '';
 
@@ -324,6 +373,47 @@
             }
         }
 
+        // --- 原生 Pointer Events 拖曳排序實現 ---
+        let draggedIdx = null;
+        function attachDragEvents(element, index) {
+            const handle = element.querySelector('.drag-handle');
+            
+            handle.addEventListener('pointerdown', (e) => {
+                draggedIdx = index;
+                element.classList.add('opacity-50');
+                handle.setPointerCapture(e.pointerId);
+            });
+
+            handle.addEventListener('pointermove', (e) => {
+                if (draggedIdx === null) return;
+                const target = document.elementFromPoint(e.clientX, e.clientY);
+                if (!target) return;
+                const targetCard = target.closest('[data-index]');
+                if (targetCard && targetCard !== element) {
+                    const targetIdx = parseInt(targetCard.dataset.index, 10);
+                    if (!isNaN(targetIdx) && targetIdx !== draggedIdx) {
+                        const moved = themeOrder.splice(draggedIdx, 1)[0];
+                        themeOrder.splice(targetIdx, 0, moved);
+                        draggedIdx = targetIdx;
+                        saveData();
+                        renderSlots();
+                    }
+                }
+            });
+
+            const endDrag = () => {
+                if (draggedIdx !== null) {
+                    draggedIdx = null;
+                    element.classList.remove('opacity-50');
+                    saveData();
+                    renderAll();
+                }
+            };
+
+            handle.addEventListener('pointerup', endDrag);
+            handle.addEventListener('pointercancel', endDrag);
+        }
+
         function renderFAB() {
             const menu = document.getElementById('fab-menu');
             const mainFab = document.getElementById('main-fab');
@@ -332,8 +422,8 @@
             mainFab.innerText = themesData[currentThemeId] ? themesData[currentThemeId].icon : '📂';
             mainFab.style.display = isEditMode ? 'none' : 'flex';
 
-            Object.keys(themesData).forEach(key => {
-                if (key !== currentThemeId) {
+            themeOrder.forEach(key => {
+                if (key !== currentThemeId && themesData[key]) {
                     const t = themesData[key];
                     menu.innerHTML += `
                         <button onclick="switchTheme('${key}')" class="flex items-center space-x-2 bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 active:scale-95 transition-transform">
@@ -344,7 +434,7 @@
             });
         }
 
-        // --- CRUD 操作 (基於自建 Modal) ---
+        // --- CRUD 操作 ---
         
         function actionAddTheme() {
             openModal({
@@ -358,8 +448,9 @@
                     const newId = generateId();
                     themesData[newId] = { name: name, icon: finalIcon };
                     clipboardData[newId] = Array.from({length: 5}, () => ({ title: '', text: '' }));
-                    saveData();
+                    themeOrder.push(newId);
                     currentThemeId = newId;
+                    saveData();
                     renderAll();
                     showToast('已新增主題', '✅');
                 }
@@ -395,8 +486,9 @@
                 onConfirm: () => {
                     delete themesData[currentThemeId];
                     delete clipboardData[currentThemeId];
+                    themeOrder = themeOrder.filter(id => id !== currentThemeId);
+                    currentThemeId = themeOrder[0];
                     saveData();
-                    currentThemeId = Object.keys(themesData)[0];
                     renderAll();
                     showToast('已刪除', '🗑️');
                 }
@@ -435,9 +527,11 @@
             });
         }
 
-        // --- 互動邏輯 (正常模式：雙擊貼上/單擊複製) ---
+        // --- 互動邏輯 ---
         function switchTheme(themeKey) {
+            if (!themesData[themeKey]) return;
             currentThemeId = themeKey;
+            saveData();
             toggleFAB(false);
             renderAll();
         }
@@ -496,7 +590,6 @@
                     showToast('剪貼簿為空', '⚠️');
                 }
             } catch (err) {
-                // 如果自動貼上被擋，退化為 Modal 手動輸入 (僅更新內文)
                 openModal({
                     type: 'prompt',
                     title: '📋 手動貼上',
@@ -549,14 +642,11 @@
              if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
         });
 
-        // --- PWA Service Worker (修正 Blob 問題) ---
+        // --- PWA Service Worker ---
         function registerServiceWorker() {
             if ('serviceWorker' in navigator) {
-                // 為了避免在預覽環境及嚴格安全性下 Blob URL 報錯，
-                // 改為標準的 sw.js 註冊方式，並靜默處理找不到檔案的錯誤。
-                // 若您部署至 GitHub Pages，應用程式依然可依賴 Safari 預設快取運作。
-                navigator.serviceWorker.register('./sw.js').catch(e => {
-                    console.log('以無 ServiceWorker 模式運行 (正常現象，不影響主要功能)');
+                navigator.serviceWorker.register('./sw.js').catch(() => {
+                    console.log('以無 ServiceWorker 模式運行');
                 });
             }
         }
