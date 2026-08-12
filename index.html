@@ -30,7 +30,6 @@
         }
     </script>
     <style>
-        /* 隱藏滾動條但保持可滾動 */
         ::-webkit-scrollbar { display: none; }
         body { 
             -ms-overflow-style: none; 
@@ -41,10 +40,10 @@
         }
         
         /* 點擊波紋與過場動畫 */
-        .slot-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .slot-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease; }
         .slot-card:active { transform: scale(0.98); }
-        .slot-flash { animation: flash-green 0.5s ease-out; }
-        @keyframes flash-green {
+        .slot-flash { animation: flash-blue 0.5s ease-out; }
+        @keyframes flash-blue {
             0% { background-color: rgba(59, 130, 246, 0.25); }
             100% { background-color: transparent; }
         }
@@ -70,6 +69,10 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+
+        /* 滑動手勢動畫 */
+        .swiping { transition: none !important; }
+        .swipe-removed { transform: translateX(-100%) !important; opacity: 0; transition: all 0.25s ease-out !important; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col font-sans overflow-hidden antialiased selection:bg-brand-500 selection:text-white">
@@ -129,7 +132,6 @@
     </div>
 
     <script>
-        // --- IndexedDB 管理 (高畫質圖片大容量儲存) ---
         const DB_NAME = 'FastClipDB';
         const DB_VERSION = 1;
         const STORE_NAME = 'image_blobs';
@@ -187,7 +189,6 @@
             });
         }
 
-        // --- 全域變數 ---
         let themesData = {}; 
         let clipboardData = {}; 
         let themeOrder = [];
@@ -223,7 +224,6 @@
             }
         }
 
-        // --- Custom Modal 管理器 ---
         let modalCallback = null;
         const modalEl = document.getElementById('custom-modal');
         const modalTitle = document.getElementById('modal-title');
@@ -333,7 +333,6 @@
             closeModal();
         };
 
-        // --- 初始化與資料載入 ---
         async function initData() {
             await initDB();
             try {
@@ -383,17 +382,31 @@
                 currentThemeId = themeOrder[0];
             }
 
+            ensureAutoEmptySlot(currentThemeId);
             renderAll();
         }
 
+        // 自動生成機制：若最後一格非空，自動補上一個全新的空白格
+        function ensureAutoEmptySlot(themeId) {
+            const slots = clipboardData[themeId];
+            if (!slots || slots.length === 0) {
+                clipboardData[themeId] = [{ title: '', text: '', type: 'text', imageId: null }];
+                return;
+            }
+            const last = slots[slots.length - 1];
+            if ((last.text && last.text.trim()) || last.imageId || (last.title && last.title.trim())) {
+                slots.push({ title: '', text: '', type: 'text', imageId: null });
+            }
+        }
+
         function saveData() {
+            ensureAutoEmptySlot(currentThemeId);
             localStorage.setItem('pwa_themes_data', JSON.stringify(themesData));
             localStorage.setItem('pwa_clipboard_data', JSON.stringify(clipboardData));
             localStorage.setItem('pwa_theme_order', JSON.stringify(themeOrder));
             localStorage.setItem('pwa_last_theme', currentThemeId);
         }
 
-        // --- 核心 UI 渲染 ---
         function renderAll() {
             renderHeader();
             renderSlots();
@@ -431,7 +444,7 @@
                     <h1 class="text-xl font-bold tracking-tight text-slate-900 truncate flex items-center">
                         <span class="mr-2">${escapeHTML(theme.icon)}</span> ${escapeHTML(theme.name)}
                     </h1>
-                    <p class="text-[11px] text-slate-500 mt-0.5">點擊複製 • 雙擊確認貼上/預覽</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">點擊複製 • 雙擊貼上 • ⬅️ 左滑可刪除</p>
                 `;
                 actionsContainer.innerHTML = `
                     <button onclick="toggleEditMode()" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl shadow-sm active:scale-95 transition-transform text-xs flex items-center">
@@ -484,6 +497,7 @@
                 container.appendChild(divider);
             }
             
+            ensureAutoEmptySlot(currentThemeId);
             const slots = clipboardData[currentThemeId] || [];
             
             for (let index = 0; index < slots.length; index++) {
@@ -494,7 +508,7 @@
                 const isImage = item.type === 'image' || !!item.imageId;
 
                 const card = document.createElement('div');
-                card.className = `slot-card bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex items-start space-x-3 relative overflow-hidden ${isEditMode ? '' : 'cursor-pointer active:scale-98'}`;
+                card.className = `slot-card bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex items-start space-x-3 relative overflow-hidden ${isEditMode ? '' : 'cursor-pointer'}`;
                 
                 const titleHTML = hasTitle ? `<h4 class="font-bold text-sm text-slate-900 mb-1 truncate">${escapeHTML(item.title)}</h4>` : '';
 
@@ -551,18 +565,6 @@
                     loadSlotImage(item.imageId, index);
                 }
             }
-
-            if (isEditMode) {
-                const addBtn = document.createElement('button');
-                addBtn.onclick = () => {
-                    clipboardData[currentThemeId].push({ title: '', text: '', type: 'text', imageId: null });
-                    saveData(); renderSlots();
-                    setTimeout(() => container.scrollTop = container.scrollHeight, 50);
-                };
-                addBtn.className = "w-full py-3.5 mt-2 border-2 border-dashed border-slate-300 hover:border-brand-500 bg-white/50 rounded-2xl text-slate-500 font-semibold active:scale-95 transition-all text-xs flex items-center justify-center space-x-1";
-                addBtn.innerHTML = "<span>➕</span><span>新增插槽</span>";
-                container.appendChild(addBtn);
-            }
         }
 
         async function loadSlotImage(imageId, index) {
@@ -580,7 +582,48 @@
             }
         }
 
-        // --- 拖曳排序實作 ---
+        function attachSwipeEvents(element, index) {
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let isSwiping = false;
+
+            element.addEventListener('touchstart', (e) => {
+                if (isEditMode) return;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                isSwiping = false;
+            }, { passive: true });
+
+            element.addEventListener('touchmove', (e) => {
+                if (isEditMode) return;
+                const deltaX = e.touches[0].clientX - startX;
+                const deltaY = e.touches[0].clientY - startY;
+
+                // 判斷是否為主要水平滑動
+                if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX < 0) {
+                    isSwiping = true;
+                    currentX = deltaX;
+                    element.classList.add('swiping');
+                    element.style.transform = `translateX(${currentX}px)`;
+                }
+            }, { passive: true });
+
+            element.addEventListener('touchend', () => {
+                if (!isSwiping || isEditMode) return;
+                element.classList.remove('swiping');
+                // 若左滑距離超過 80px 觸發刪除
+                if (currentX < -80) {
+                    element.classList.add('swipe-removed');
+                    setTimeout(() => actionDeleteSlot(index), 200);
+                } else {
+                    element.style.transform = 'translateX(0px)';
+                }
+                currentX = 0;
+                isSwiping = false;
+            });
+        }
+
         let draggedIdx = null;
         function attachDragEvents(element, index) {
             const handle = element.querySelector('.drag-handle');
@@ -640,10 +683,16 @@
                     `;
                 }
             });
+
+            // 整合在 FAB 選單最下方的「➕ 新增類別」按鈕
+            menu.innerHTML += `
+                <button onclick="actionAddTheme()" class="flex items-center space-x-2 bg-brand-50 border border-brand-200 px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform text-brand-600 font-bold">
+                    <span class="text-sm">➕</span>
+                    <span class="text-xs">新增類別</span>
+                </button>
+            `;
         }
 
-        // --- CRUD 操作 ---
-        
         function actionAddTheme() {
             openModal({
                 type: 'double-prompt',
@@ -757,7 +806,7 @@
                 confirmText: '確定移除',
                 onConfirm: async () => {
                     const item = clipboardData[currentThemeId][index];
-                    if (item.imageId) await deleteImageBlob(item.imageId);
+                    if (item && item.imageId) await deleteImageBlob(item.imageId);
                     clipboardData[currentThemeId].splice(index, 1);
                     saveData();
                     renderSlots();
@@ -766,7 +815,6 @@
             });
         }
 
-        // --- 互動邏輯 (單擊/雙擊/複製/跳轉) ---
         function switchTheme(themeKey) {
             if (!themesData[themeKey]) return;
             currentThemeId = themeKey;
@@ -778,6 +826,8 @@
         let lastTapTime = 0;
         let tapTimer = null;
         function attachTapEvents(element, index) {
+            attachSwipeEvents(element, index);
+
             const handler = async (e) => {
                 e.preventDefault(); 
                 const currentTime = new Date().getTime();
@@ -785,10 +835,8 @@
 
                 if (tapLength < 350 && tapLength > 0) {
                     clearTimeout(tapTimer);
-                    // 雙擊：主動詢問是否貼上
                     await handlePaste(element, index);
                 } else {
-                    // 單擊：複製內容或跳轉 URL
                     tapTimer = setTimeout(() => handleCardClick(element, index), 350);
                 }
                 lastTapTime = currentTime;
@@ -827,9 +875,7 @@
                         triggerFlash(element);
                         showToast('已複製圖片至剪貼簿!', '🖼️');
                         return;
-                    } catch (err) {
-                        // 降級處理
-                    }
+                    } catch (err) {}
                 }
                 showToast('圖片已儲存於機器中', 'ℹ️');
                 return;
@@ -858,12 +904,10 @@
             }
         }
 
-        // 雙擊主動詢問貼上邏輯
         async function handlePaste(element, index) {
             try {
                 if (!navigator.clipboard) throw new Error("不支援 API");
 
-                // 1. 檢查剪貼簿中是否有圖片
                 if (navigator.clipboard.read) {
                     const items = await navigator.clipboard.read();
                     for (const item of items) {
@@ -886,7 +930,6 @@
                     }
                 }
 
-                // 2. 檢查剪貼簿中是否有純文字
                 if (navigator.clipboard.readText) {
                     const pastedText = await navigator.clipboard.readText();
                     if (pastedText && pastedText.trim()) {
@@ -906,7 +949,6 @@
 
                 showToast('剪貼簿無可讀取內容', '⚠️');
             } catch (err) {
-                // 瀏覽器權限受阻時，使用備用手動輸入框彈窗
                 openModal({
                     type: 'slot-edit',
                     title: `📋 貼上內容至插槽 #${index + 1}`,
@@ -951,7 +993,6 @@
             showToast('已貼上內容!', '✅');
         }
 
-        // 全域 Clipboard Paste 事件監聽 (快捷鍵 Ctrl+V / Command+V 亦可運作)
         document.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (const item of items) {
@@ -980,7 +1021,6 @@
             }
         });
 
-        // --- UI 輔助特效 ---
         function triggerFlash(element) {
             if (!element) return;
             element.classList.remove('slot-flash');
@@ -1019,7 +1059,6 @@
              if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
         });
 
-        // --- Service Worker 註冊 ---
         function registerServiceWorker() {
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -1029,7 +1068,6 @@
         window.addEventListener('offline', () => document.getElementById('offline-badge').classList.remove('hidden'));
         window.addEventListener('online', () => document.getElementById('offline-badge').classList.hidden = true);
 
-        // --- 啟動入口 ---
         window.addEventListener('DOMContentLoaded', () => {
             initData();
             registerServiceWorker();
