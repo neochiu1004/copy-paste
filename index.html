@@ -306,6 +306,8 @@
             setTimeout(() => modalEl.classList.add('hidden'), 200);
             modalCallback = null;
             tempPendingBlob = null;
+            // 復原列表所有因滑動而位移的卡片
+            renderSlots();
         }
 
         function handleFileSelect(e) {
@@ -556,7 +558,7 @@
                             ${bodyHTML}
                         </div>
                     `;
-                    attachTapEvents(card, index);
+                    attachSlotInteractions(card, index);
                 }
 
                 container.appendChild(card);
@@ -582,17 +584,22 @@
             }
         }
 
-        function attachSwipeEvents(element, index) {
+        function attachSlotInteractions(element, index) {
             let startX = 0;
             let startY = 0;
             let currentX = 0;
             let isSwiping = false;
+            let isScrolled = false;
+            let lastTapTime = 0;
+            let tapTimer = null;
 
             element.addEventListener('touchstart', (e) => {
                 if (isEditMode) return;
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
+                currentX = 0;
                 isSwiping = false;
+                isScrolled = false;
             }, { passive: true });
 
             element.addEventListener('touchmove', (e) => {
@@ -600,8 +607,14 @@
                 const deltaX = e.touches[0].clientX - startX;
                 const deltaY = e.touches[0].clientY - startY;
 
-                // 判斷是否為主要水平滑動
-                if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX < 0) {
+                // 若縱向滾動大於橫向滑動，視為頁面滾動
+                if (Math.abs(deltaY) > Math.abs(deltaX) && !isSwiping) {
+                    isScrolled = true;
+                    return;
+                }
+
+                // 判斷是否為主要左滑手勢
+                if (Math.abs(deltaX) > 10 && deltaX < 0) {
                     isSwiping = true;
                     currentX = deltaX;
                     element.classList.add('swiping');
@@ -609,18 +622,54 @@
                 }
             }, { passive: true });
 
-            element.addEventListener('touchend', () => {
-                if (!isSwiping || isEditMode) return;
-                element.classList.remove('swiping');
-                // 若左滑距離超過 80px 觸發刪除
-                if (currentX < -80) {
-                    element.classList.add('swipe-removed');
-                    setTimeout(() => actionDeleteSlot(index), 200);
-                } else {
-                    element.style.transform = 'translateX(0px)';
+            element.addEventListener('touchend', (e) => {
+                if (isEditMode) return;
+
+                if (isSwiping) {
+                    element.classList.remove('swiping');
+                    if (currentX < -80) {
+                        element.classList.add('swipe-removed');
+                        setTimeout(() => actionDeleteSlot(index), 200);
+                    } else {
+                        element.style.transform = 'translateX(0px)';
+                    }
+                    return; // 重要：滑動觸發後，中斷後續的點擊/雙擊邏輯
                 }
-                currentX = 0;
-                isSwiping = false;
+
+                // 非滑動、非頁面滾動情況下，觸發點擊/雙擊判斷
+                if (!isScrolled) {
+                    e.preventDefault();
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTapTime;
+
+                    if (tapLength < 350 && tapLength > 0) {
+                        clearTimeout(tapTimer);
+                        handlePaste(element, index);
+                    } else {
+                        tapTimer = setTimeout(() => {
+                            handleCardClick(element, index);
+                        }, 350);
+                    }
+                    lastTapTime = currentTime;
+                }
+            });
+
+            // 滑鼠相容點擊監聽 (桌面端開發或測試)
+            element.addEventListener('click', (e) => {
+                if (e.pointerType === 'mouse' && !isEditMode) {
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTapTime;
+
+                    if (tapLength < 350 && tapLength > 0) {
+                        clearTimeout(tapTimer);
+                        handlePaste(element, index);
+                    } else {
+                        tapTimer = setTimeout(() => {
+                            handleCardClick(element, index);
+                        }, 350);
+                    }
+                    lastTapTime = currentTime;
+                }
             });
         }
 
@@ -684,7 +733,6 @@
                 }
             });
 
-            // 整合在 FAB 選單最下方的「➕ 新增類別」按鈕
             menu.innerHTML += `
                 <button onclick="actionAddTheme()" class="flex items-center space-x-2 bg-brand-50 border border-brand-200 px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform text-brand-600 font-bold">
                     <span class="text-sm">➕</span>
@@ -823,30 +871,6 @@
             renderAll();
         }
 
-        let lastTapTime = 0;
-        let tapTimer = null;
-        function attachTapEvents(element, index) {
-            attachSwipeEvents(element, index);
-
-            const handler = async (e) => {
-                e.preventDefault(); 
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - lastTapTime;
-
-                if (tapLength < 350 && tapLength > 0) {
-                    clearTimeout(tapTimer);
-                    await handlePaste(element, index);
-                } else {
-                    tapTimer = setTimeout(() => handleCardClick(element, index), 350);
-                }
-                lastTapTime = currentTime;
-            };
-            element.addEventListener('touchend', handler);
-            element.addEventListener('click', (e) => {
-                if (e.pointerType === 'mouse') handler(e);
-            });
-        }
-
         async function handleCardClick(element, index) {
             const item = clipboardData[currentThemeId][index];
             const isUrl = item.type === 'url' || isValidURL(item.text);
@@ -877,7 +901,7 @@
                         return;
                     } catch (err) {}
                 }
-                showToast('圖片已儲存於機器中', 'ℹ️');
+                showToast('圖片已儲存於裝置中', 'ℹ️');
                 return;
             }
 
@@ -1066,7 +1090,7 @@
         }
 
         window.addEventListener('offline', () => document.getElementById('offline-badge').classList.remove('hidden'));
-        window.addEventListener('online', () => document.getElementById('offline-badge').classList.hidden = true);
+        window.addEventListener('online', () => document.getElementById('offline-badge').classList.add('hidden'));
 
         window.addEventListener('DOMContentLoaded', () => {
             initData();
