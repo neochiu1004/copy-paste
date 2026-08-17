@@ -1,138 +1,190 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html class="light" lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <!-- 強制禁止縮放，防止 iOS 雙擊與輸入框聚焦時畫面放大 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <!-- iOS PWA 專屬設定 -->
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport" />
+    <title>ClipFlow - 極速剪貼 PWA</title>
+    
+    <!-- iOS PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="極速剪貼">
-    <title>極速剪貼 PWA</title>
-    <!-- 引入 Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
+    <meta name="apple-mobile-web-app-title" content="ClipFlow">
+    <meta name="theme-color" content="#ffffff">
+
+    <!-- Fonts & Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Quicksand:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
         tailwind.config = {
-            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        brand: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                        }
+                        "primary": "#00658d",
+                        "primary-container": "#c6e7ff",
+                        "on-primary-container": "#001e2d",
+                        "surface": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "surface-container": "#e6eeff",
+                        "surface-container-high": "#dce9ff",
+                        "on-surface": "#0d1c2e",
+                        "on-surface-variant": "#3e4850",
+                        "outline": "#6e7881",
+                        "outline-variant": "#bdc8d1",
+                        "secondary": "#4f616a",
+                        "secondary-container": "#cfe3ee",
+                        "tertiary": "#725c00",
+                        "tertiary-container": "#ffe07c",
+                        "error": "#ba1a1a"
+                    },
+                    fontFamily: {
+                        "body-md": ["Noto Sans TC", "Plus Jakarta Sans", "sans-serif"],
+                        "headline-md": ["Noto Sans TC", "Quicksand", "sans-serif"],
                     }
                 }
             }
         }
     </script>
     <style>
-        ::-webkit-scrollbar { display: none; }
         body { 
-            -ms-overflow-style: none; 
-            scrollbar-width: none; 
-            user-select: none; 
+            background-color: #f8f9ff; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: none;
+            user-select: none;
             -webkit-user-select: none;
-            touch-action: manipulation;
         }
         
-        /* 點擊波紋與過場動畫 */
-        .slot-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .ambient-shadow { box-shadow: 0px 4px 12px rgba(0, 101, 141, 0.08); }
+        .ambient-shadow-high { box-shadow: 0px 12px 24px rgba(0, 101, 141, 0.18); }
+        
+        /* 複製閃爍與滑動手勢過場動畫 */
+        .slot-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease; }
         .slot-card:active { transform: scale(0.98); }
-        .slot-flash { animation: flash-blue 0.5s ease-out; }
-        @keyframes flash-blue {
-            0% { background-color: rgba(59, 130, 246, 0.25); }
-            100% { background-color: transparent; }
+        .slot-flash { animation: flash-cyan 0.5s ease-out; }
+        @keyframes flash-cyan {
+            0% { background-color: rgba(198, 231, 255, 0.8); }
+            100% { background-color: #ffffff; }
         }
 
-        /* FAB 展開動畫 */
-        .fab-menu { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; opacity: 0; transform: translateY(16px) scale(0.92); }
-        .fab-menu.active { pointer-events: auto; opacity: 1; transform: translateY(0) scale(1); }
-        
-        /* Toast 動畫 */
-        .toast { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform: translateY(-100%); opacity: 0; }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        
-        /* Modal 動畫 */
-        #custom-modal.show { display: flex; animation: fadeIn 0.2s ease-out forwards; }
-        #custom-modal .modal-box { transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        #custom-modal.show .modal-box { transform: scale(1); }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* 文字截斷 3 行 */
-        .line-clamp-3 {
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        /* 滑動手勢動畫 */
         .swiping { transition: none !important; }
         .swipe-removed { transform: translateX(-100%) !important; opacity: 0; transition: all 0.25s ease-out !important; }
+
+        @keyframes slideUpFade {
+            0% { opacity: 0; transform: translate(-50%, 20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            90% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -20px); }
+        }
+        .toast-animate { animation: slideUpFade 2.2s ease-in-out forwards; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 h-screen flex flex-col font-sans overflow-hidden antialiased selection:bg-brand-500 selection:text-white">
+<body class="bg-surface text-on-surface font-body-md h-[100dvh] w-full flex flex-col overflow-hidden antialiased">
 
-    <!-- 頂部導航列 (明亮簡約風) -->
-    <header class="pt-10 pb-4 px-6 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm z-10 shrink-0 flex justify-between items-center relative">
-        <div class="flex-1 min-w-0 pr-2" id="header-title-container"></div>
-        <div class="flex items-center space-x-2 shrink-0" id="header-actions"></div>
-        <div id="offline-badge" class="absolute top-10 right-6 hidden text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/60 px-2.5 py-0.5 rounded-full shadow-sm">
-            離線模式
+    <!-- 頂部導覽列 -->
+    <header class="flex-none flex justify-between items-center px-4 py-3 w-full z-30 bg-surface-container-lowest shadow-sm pt-[max(env(safe-area-inset-top),0.75rem)] border-b border-surface-container-high relative">
+        <div class="flex items-center gap-3 min-w-0 pr-2">
+            <div class="w-9 h-9 rounded-xl bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
+                <span class="material-symbols-outlined text-[20px] font-bold">content_paste</span>
+            </div>
+            <div class="flex flex-col min-w-0">
+                <span class="text-lg font-bold text-primary font-headline-md leading-tight">ClipFlow</span>
+                <span class="text-[11px] text-on-surface-variant/70 font-medium truncate">單擊複製 • 雙擊貼上 • 左滑刪除</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <!-- 離線提示 Badge -->
+            <div id="offline-badge" class="hidden text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full">
+                離線模式
+            </div>
+            <button id="edit-mode-btn" onclick="toggleEditMode()" class="px-3 py-1.5 rounded-xl bg-surface-container-low text-on-surface-variant text-xs font-bold hover:bg-surface-container border border-outline-variant/40 transition-colors flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">tune</span>
+                <span id="edit-mode-text">管理</span>
+            </button>
         </div>
     </header>
 
-    <!-- 剪貼插槽列表與主題管理區域 -->
-    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-28" id="slot-container"></main>
-
-    <!-- 主題懸浮按鈕 (FAB) -->
-    <div class="fixed bottom-6 right-6 z-40 flex flex-col items-end">
-        <div class="fab-menu flex flex-col items-end space-y-2.5 mb-3" id="fab-menu"></div>
-        <button id="main-fab" aria-label="切換主題" class="w-14 h-14 bg-brand-600 hover:bg-brand-700 text-white rounded-2xl shadow-lg shadow-brand-600/30 flex items-center justify-center text-2xl transition-all active:scale-90 relative z-50">
-        </button>
+    <!-- 橫向標籤列 (主題分類選擇區) -->
+    <div class="flex-none w-full bg-surface-container-lowest border-b border-surface-container-high py-2.5 px-4 shadow-xs">
+        <div id="group-tabs-container" class="flex overflow-x-auto hide-scrollbar gap-2 items-center">
+            <!-- 標籤將透過 JS 動態注入 -->
+        </div>
     </div>
 
-    <!-- 頂部提示框 (Toast) -->
-    <div id="toast" class="toast fixed top-12 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white px-5 py-2.5 rounded-2xl shadow-xl z-50 flex items-center space-x-2.5 pointer-events-none">
-        <span id="toast-icon" class="text-base">✅</span>
-        <span id="toast-msg" class="text-sm font-medium tracking-wide">操作成功</span>
-    </div>
+    <!-- 主要內容滾動區 -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 relative bg-surface" id="main-scroll-area">
+        
+        <!-- 分類管理區塊 (僅在編輯模式下顯示) -->
+        <div id="category-management-panel" class="hidden bg-surface-container-lowest p-4 rounded-2xl shadow-sm border border-surface-container-high mb-4">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xs font-bold tracking-wider text-primary uppercase flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">reorder</span>
+                    分類排序 (按住 ☰ 拖曳調整順序)
+                </h3>
+                <button onclick="actionAddTheme()" class="px-3 py-1 rounded-lg bg-primary-container text-on-primary-container text-xs font-bold hover:bg-primary-container/80 transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">add</span> 新增分類
+                </button>
+            </div>
+            <div id="theme-sort-list" class="space-y-2"></div>
+        </div>
 
-    <!-- 自建內嵌 Modal -->
-    <div id="custom-modal" class="hidden fixed inset-0 z-[100] items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-        <div class="modal-box bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-slate-100 p-6">
-            <h3 id="modal-title" class="text-lg font-bold text-slate-900 mb-2">標題</h3>
-            <p id="modal-message" class="text-sm text-slate-600 mb-2 break-all leading-relaxed hidden whitespace-pre-wrap">訊息內容</p>
+        <!-- 剪貼卡片網格 -->
+        <div id="grid-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-28">
+            <!-- 插槽卡片將透過 JS 動態注入 -->
+        </div>
+    </main>
+
+    <!-- 主要懸浮按鈕 FAB (智能貼上至尾部空白格/新建) -->
+    <button onclick="smartAddAction()" class="fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-primary rounded-2xl ambient-shadow-high flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-40">
+        <span class="material-symbols-outlined text-[28px]">add</span>
+    </button>
+
+    <!-- 通用現代視窗 Modal -->
+    <div id="custom-modal" class="fixed inset-0 bg-black/40 z-[100] hidden items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="modal-box bg-surface-container-lowest rounded-3xl w-full max-w-sm shadow-2xl border border-surface-container p-6 flex flex-col gap-4">
+            <h3 id="modal-title" class="text-lg font-bold text-on-surface font-headline-md">提示</h3>
+            <p id="modal-message" class="text-sm text-on-surface-variant leading-relaxed hidden whitespace-pre-wrap break-all"></p>
             
-            <div id="modal-inputs" class="space-y-3 hidden mb-4">
-                <input type="text" id="modal-input-1" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 text-sm transition-shadow" placeholder="輸入文字">
-                <textarea id="modal-textarea" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 text-sm transition-shadow hidden min-h-[90px]" placeholder="輸入文字內容"></textarea>
-                <input type="text" id="modal-input-2" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-800 text-sm transition-shadow hidden" placeholder="輸入 Emoji 圖示">
+            <div id="modal-inputs" class="space-y-3 hidden">
+                <input type="text" id="modal-input-1" class="w-full px-4 py-2.5 rounded-xl bg-surface border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-colors" placeholder="輸入文字">
+                <textarea id="modal-textarea" class="w-full px-4 py-2.5 rounded-xl bg-surface border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-colors hidden min-h-[100px] resize-none" placeholder="輸入內容..."></textarea>
+                <input type="text" id="modal-input-2" class="w-full px-4 py-2.5 rounded-xl bg-surface border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-colors hidden" placeholder="輸入 Emoji">
                 
-                <div id="modal-image-upload" class="hidden flex flex-col items-center justify-center border-2 border-dashed border-slate-200 hover:border-brand-500 rounded-2xl p-4 bg-slate-50 transition-colors cursor-pointer" onclick="document.getElementById('file-input').click()">
-                    <span class="text-2xl mb-1">🖼️</span>
-                    <span class="text-xs font-semibold text-slate-600" id="image-upload-status">點擊選擇照片或更換圖片</span>
+                <div id="modal-image-upload" class="hidden flex flex-col items-center justify-center border-2 border-dashed border-outline-variant hover:border-primary rounded-2xl p-4 bg-surface transition-colors cursor-pointer" onclick="document.getElementById('file-input').click()">
+                    <span class="material-symbols-outlined text-primary text-3xl mb-1">add_photo_alternate</span>
+                    <span class="text-xs font-bold text-on-surface-variant" id="image-upload-status">點擊選擇照片或更換圖片</span>
                     <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
                 </div>
             </div>
 
-            <div id="modal-image-preview" class="hidden my-3 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 max-h-48 flex justify-center items-center">
-                <img id="modal-img-element" src="" class="max-h-48 object-contain w-full" alt="圖片預覽">
+            <div id="modal-image-preview" class="hidden rounded-xl overflow-hidden border border-surface-container bg-surface max-h-48 flex justify-center items-center">
+                <img id="modal-img-element" src="" class="max-h-48 object-contain w-full" alt="預覽">
             </div>
             
-            <div class="mt-4 flex justify-end space-x-2.5">
-                <button id="modal-cancel" class="px-5 py-2.5 rounded-xl text-slate-600 font-semibold hover:bg-slate-100 active:scale-95 transition-all text-sm">取消</button>
-                <button id="modal-confirm" class="px-5 py-2.5 rounded-xl bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/20 hover:bg-brand-700 active:scale-95 transition-all text-sm">確定</button>
+            <div class="flex justify-end gap-2.5 mt-2">
+                <button id="modal-cancel" class="px-5 py-2.5 rounded-xl text-on-surface-variant font-bold hover:bg-surface-container active:scale-95 transition-all text-sm">取消</button>
+                <button id="modal-confirm" class="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold shadow-sm hover:bg-primary/90 active:scale-95 transition-all text-sm">確定</button>
             </div>
         </div>
     </div>
 
+    <!-- Toast 提示訊息 -->
+    <div id="toast" class="toast-animate fixed top-[env(safe-area-inset-top,20px)] mt-3 left-1/2 -translate-x-1/2 bg-on-surface text-surface px-5 py-2.5 rounded-full shadow-xl font-bold text-sm z-[110] hidden items-center gap-2 pointer-events-none">
+        <span id="toast-icon" class="material-symbols-outlined text-[18px] text-primary-container">check_circle</span>
+        <span id="toast-msg">操作成功</span>
+    </div>
+
     <script>
-        const DB_NAME = 'FastClipDB';
+        // ==========================================
+        // 1. IndexedDB 核心存取 (圖片 Blob 儲存)
+        // ==========================================
+        const DB_NAME = 'ClipFlowDB';
         const DB_VERSION = 1;
         const STORE_NAME = 'image_blobs';
         let dbInstance = null;
@@ -189,6 +241,9 @@
             });
         }
 
+        // ==========================================
+        // 2. 狀態管理與變數
+        // ==========================================
         let themesData = {}; 
         let clipboardData = {}; 
         let themeOrder = [];
@@ -198,9 +253,9 @@
         const imageUrlCache = new Map();
 
         const DEFAULT_THEMES = {
-            't_work': { icon: '💼', name: '工作' },
-            't_personal': { icon: '🏠', name: '個人' },
-            't_ideas': { icon: '💡', name: '靈感' }
+            't_work': { icon: '💼', name: '工作常用' },
+            't_personal': { icon: '🏠', name: '個人日常' },
+            't_ideas': { icon: '💡', name: '靈感筆記' }
         };
 
         const escapeHTML = (str) => {
@@ -224,6 +279,7 @@
             }
         }
 
+        // Modal 控制邏輯
         let modalCallback = null;
         const modalEl = document.getElementById('custom-modal');
         const modalTitle = document.getElementById('modal-title');
@@ -275,7 +331,7 @@
                 modalTextarea.classList.remove('hidden');
                 modalImageUpload.classList.remove('hidden');
 
-                modalInput1.placeholder = '自訂標題 (選填，例如：常用連結)';
+                modalInput1.placeholder = '自訂標題 (選填，例如：常用地址)';
                 modalInput1.value = options.titleValue || '';
                 modalTextarea.placeholder = '輸入文字內容或貼上網址...';
                 modalTextarea.value = options.textValue || '';
@@ -286,13 +342,13 @@
                 modalInput2.classList.remove('hidden');
                 modalInput1.placeholder = options.placeholder1 || '請輸入...';
                 modalInput1.value = options.value1 || '';
-                modalInput2.placeholder = options.placeholder2 || '選項 2';
+                modalInput2.placeholder = options.placeholder2 || '圖示 (Emoji)';
                 modalInput2.value = options.value2 || '';
             }
 
             modalCallback = options.onConfirm;
-            modalEl.classList.add('show');
             modalEl.classList.remove('hidden');
+            modalEl.classList.add('flex');
 
             if (options.type === 'slot-edit') {
                 setTimeout(() => modalTextarea.focus(), 100);
@@ -302,11 +358,10 @@
         }
 
         function closeModal() {
-            modalEl.classList.remove('show');
-            setTimeout(() => modalEl.classList.add('hidden'), 200);
+            modalEl.classList.add('hidden');
+            modalEl.classList.remove('flex');
             modalCallback = null;
             tempPendingBlob = null;
-            // 復原列表所有因滑動而位移的卡片
             renderSlots();
         }
 
@@ -314,7 +369,7 @@
             const file = e.target.files && e.target.files[0];
             if (!file) return;
             if (!file.type.startsWith('image/')) {
-                showToast('請選擇圖片檔案', '⚠️');
+                showToast('請選擇圖片檔案', 'warning');
                 return;
             }
             tempPendingBlob = file;
@@ -335,6 +390,9 @@
             closeModal();
         };
 
+        // ==========================================
+        // 3. 資料初始化與自動補滿邏輯
+        // ==========================================
         async function initData() {
             await initDB();
             try {
@@ -353,7 +411,7 @@
 
             Object.keys(themesData).forEach(key => {
                 if (!clipboardData[key] || !Array.isArray(clipboardData[key])) {
-                    clipboardData[key] = Array.from({length: 5}, () => ({ title: '', text: '', type: 'text', imageId: null }));
+                    clipboardData[key] = Array.from({length: 4}, () => ({ title: '', text: '', type: 'text', imageId: null }));
                 } else {
                     clipboardData[key] = clipboardData[key].map(item => {
                         if (typeof item === 'string') return { title: '', text: item, type: isValidURL(item) ? 'url' : 'text', imageId: null };
@@ -373,7 +431,7 @@
 
             if (themeOrder.length === 0) {
                 themesData['t_default'] = { icon: '📝', name: '常用筆記' };
-                clipboardData['t_default'] = Array.from({length: 5}, () => ({ title: '', text: '', type: 'text', imageId: null }));
+                clipboardData['t_default'] = Array.from({length: 4}, () => ({ title: '', text: '', type: 'text', imageId: null }));
                 themeOrder = ['t_default'];
             }
 
@@ -388,7 +446,7 @@
             renderAll();
         }
 
-        // 自動生成機制：若最後一格非空，自動補上一個全新的空白格
+        // 自動生成機制：末尾非空時補上一格空白
         function ensureAutoEmptySlot(themeId) {
             const slots = clipboardData[themeId];
             if (!slots || slots.length === 0) {
@@ -410,98 +468,80 @@
         }
 
         function renderAll() {
-            renderHeader();
+            renderHeaderAndTabs();
             renderSlots();
-            renderFAB();
         }
 
         function toggleEditMode() {
             isEditMode = !isEditMode;
-            if (!isEditMode) toggleFAB(false);
+            document.getElementById('edit-mode-text').innerText = isEditMode ? '完成' : '管理';
+            document.getElementById('category-management-panel').classList.toggle('hidden', !isEditMode);
             renderAll();
         }
 
-        function renderHeader() {
-            const theme = themesData[currentThemeId];
-            const titleContainer = document.getElementById('header-title-container');
-            const actionsContainer = document.getElementById('header-actions');
-            
+        // ==========================================
+        // 4. 介面渲染 (Tabs & Slot Grid)
+        // ==========================================
+        function renderHeaderAndTabs() {
+            const tabsContainer = document.getElementById('group-tabs-container');
+            tabsContainer.innerHTML = '';
+
+            themeOrder.forEach(key => {
+                const theme = themesData[key];
+                const isActive = key === currentThemeId;
+
+                const tabBtn = document.createElement('button');
+                tabBtn.className = `flex-none px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs border ${
+                    isActive 
+                        ? 'bg-primary text-on-primary border-primary ambient-shadow' 
+                        : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/50 hover:bg-surface-container'
+                }`;
+                tabBtn.innerHTML = `
+                    <span>${escapeHTML(theme.icon)}</span>
+                    <span>${escapeHTML(theme.name)}</span>
+                `;
+                tabBtn.onclick = () => switchTheme(key);
+                tabsContainer.appendChild(tabBtn);
+            });
+
+            // 編輯模式下的分類排序列表
             if (isEditMode) {
-                titleContainer.innerHTML = `
-                    <div class="flex items-center cursor-pointer active:scale-95 transition-transform" onclick="actionEditThemeName()">
-                        <h1 class="text-xl font-bold tracking-tight text-brand-600 truncate flex items-center">
-                            <span class="mr-1.5">${escapeHTML(theme.icon)}</span> ${escapeHTML(theme.name)}
-                            <span class="ml-1.5 text-xs bg-brand-50 border border-brand-200 text-brand-600 px-2 py-0.5 rounded-md">編輯名稱</span>
-                        </h1>
-                    </div>
-                `;
-                const canDelete = themeOrder.length > 1;
-                actionsContainer.innerHTML = `
-                    <button onclick="actionAddTheme()" aria-label="新增主題" class="w-9 h-9 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl active:scale-90 transition-transform flex items-center justify-center font-bold text-sm shadow-sm">➕</button>
-                    ${canDelete ? `<button onclick="actionDeleteTheme()" aria-label="刪除主題" class="w-9 h-9 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl active:scale-90 transition-transform flex items-center justify-center font-bold text-sm shadow-sm">🗑️</button>` : ''}
-                    <button onclick="toggleEditMode()" class="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl shadow-sm shadow-brand-600/20 active:scale-95 transition-transform text-xs">完成</button>
-                `;
-            } else {
-                titleContainer.innerHTML = `
-                    <h1 class="text-xl font-bold tracking-tight text-slate-900 truncate flex items-center">
-                        <span class="mr-2">${escapeHTML(theme.icon)}</span> ${escapeHTML(theme.name)}
-                    </h1>
-                    <p class="text-[11px] text-slate-500 mt-0.5">點擊複製 • 雙擊貼上 • ⬅️ 左滑可刪除</p>
-                `;
-                actionsContainer.innerHTML = `
-                    <button onclick="toggleEditMode()" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl shadow-sm active:scale-95 transition-transform text-xs flex items-center">
-                        <span class="mr-1">⚙️</span> 管理
-                    </button>
-                `;
-            }
-        }
+                const sortList = document.getElementById('theme-sort-list');
+                sortList.innerHTML = '';
 
-        async function renderSlots() {
-            const container = document.getElementById('slot-container');
-            container.innerHTML = '';
-
-            if (isEditMode) {
-                const orderSection = document.createElement('div');
-                orderSection.className = "bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 mb-4";
-                orderSection.innerHTML = `
-                    <h3 class="text-xs font-bold tracking-wider text-slate-600 uppercase mb-3 flex items-center justify-between">
-                        <span>📂 分類排序 (按住 ☰ 拖曳)</span>
-                    </h3>
-                    <div id="theme-sort-list" class="space-y-2"></div>
-                `;
-                container.appendChild(orderSection);
-
-                const sortList = orderSection.querySelector('#theme-sort-list');
                 themeOrder.forEach((tId, idx) => {
                     const t = themesData[tId];
                     const isCurrent = tId === currentThemeId;
                     const item = document.createElement('div');
-                    item.className = `flex items-center justify-between p-2.5 rounded-xl border ${isCurrent ? 'border-brand-500 bg-brand-50/50' : 'border-slate-100 bg-slate-50'}`;
+                    item.className = `flex items-center justify-between p-2.5 rounded-xl border ${isCurrent ? 'border-primary bg-primary-container/30' : 'border-surface-container bg-surface-container-low'}`;
                     item.dataset.index = idx;
                     item.dataset.id = tId;
                     item.innerHTML = `
-                        <div class="flex items-center space-x-2 cursor-pointer flex-1 min-w-0" onclick="switchTheme('${tId}')">
+                        <div class="flex items-center gap-2 cursor-pointer flex-1 min-w-0" onclick="actionEditThemeName('${tId}')">
                             <span class="text-base">${escapeHTML(t.icon)}</span>
-                            <span class="text-sm font-semibold truncate ${isCurrent ? 'text-brand-600' : 'text-slate-700'}">${escapeHTML(t.name)}</span>
-                            ${isCurrent ? '<span class="text-[10px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-md font-bold">目前</span>' : ''}
+                            <span class="text-xs font-bold truncate text-on-surface">${escapeHTML(t.name)}</span>
+                            <span class="material-symbols-outlined text-[14px] text-primary">edit</span>
                         </div>
-                        <div class="drag-handle px-3 py-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 select-none text-base touch-none">
-                            ☰
+                        <div class="flex items-center gap-2">
+                            ${themeOrder.length > 1 ? `<button onclick="actionDeleteTheme('${tId}')" class="p-1 text-error hover:bg-error/10 rounded-lg"><span class="material-symbols-outlined text-[18px]">delete</span></button>` : ''}
+                            <div class="drag-handle p-1.5 cursor-grab active:cursor-grabbing text-outline-variant hover:text-on-surface select-none touch-none">
+                                <span class="material-symbols-outlined text-[18px]">drag_indicator</span>
+                            </div>
                         </div>
                     `;
                     attachDragEvents(item, idx);
                     sortList.appendChild(item);
                 });
-
-                const divider = document.createElement('div');
-                divider.className = "text-xs font-bold tracking-wider text-slate-600 uppercase my-2 pl-1";
-                divider.innerText = "📋 插槽內容編輯";
-                container.appendChild(divider);
             }
-            
+        }
+
+        async function renderSlots() {
+            const container = document.getElementById('grid-container');
+            container.innerHTML = '';
+
             ensureAutoEmptySlot(currentThemeId);
             const slots = clipboardData[currentThemeId] || [];
-            
+
             for (let index = 0; index < slots.length; index++) {
                 const item = slots[index];
                 const hasTitle = item.title && item.title.trim().length > 0;
@@ -510,53 +550,71 @@
                 const isImage = item.type === 'image' || !!item.imageId;
 
                 const card = document.createElement('div');
-                card.className = `slot-card bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex items-start space-x-3 relative overflow-hidden ${isEditMode ? '' : 'cursor-pointer'}`;
-                
-                const titleHTML = hasTitle ? `<h4 class="font-bold text-sm text-slate-900 mb-1 truncate">${escapeHTML(item.title)}</h4>` : '';
+                card.className = `slot-card rounded-2xl border border-surface-container-high bg-surface-container-lowest p-4 ambient-shadow relative overflow-hidden flex flex-col justify-between h-48 ${isEditMode ? '' : 'cursor-pointer hover:-translate-y-1 hover:ambient-shadow-high'}`;
 
                 let bodyHTML = '';
                 if (isImage) {
                     bodyHTML = `
-                        <div class="mt-1 relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200/60 max-h-40 flex items-center justify-center">
-                            <img id="slot-img-${index}" src="" class="w-full h-32 object-cover" alt="插槽圖片">
-                            <span class="absolute bottom-1.5 right-1.5 bg-slate-900/70 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">🖼️ 圖片</span>
+                        <div class="flex-1 w-full relative rounded-xl overflow-hidden bg-surface-container my-1 border border-outline-variant/30 flex items-center justify-center">
+                            <img id="slot-img-${index}" src="" class="w-full h-full object-cover" alt="插槽圖片">
+                            <div class="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm flex items-center gap-1 font-bold">
+                                <span class="material-symbols-outlined text-[12px]">image</span> 圖片
+                            </div>
                         </div>
                     `;
                 } else if (isUrl) {
                     let domain = '';
                     try { domain = new URL(item.text.trim()).hostname; } catch(_) {}
                     bodyHTML = `
-                        <div class="mt-1 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center space-x-2">
-                            <span class="text-brand-600 text-base">🔗</span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-xs font-semibold text-brand-600 truncate">${escapeHTML(domain || '外部連結')}</p>
-                                <p class="text-[11px] text-slate-500 truncate">${escapeHTML(item.text)}</p>
+                        <div class="flex-1 my-1 p-3 rounded-xl bg-surface-container-low border border-secondary-container flex flex-col justify-center gap-1">
+                            <div class="flex items-center gap-1.5 text-primary">
+                                <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" onerror="this.style.display='none'" class="w-4 h-4 rounded-full" />
+                                <span class="text-xs font-bold truncate">${escapeHTML(domain || '外部連結')}</span>
                             </div>
+                            <p class="text-[11px] text-on-surface-variant truncate underline">${escapeHTML(item.text)}</p>
                         </div>
                     `;
                 } else if (hasContent) {
-                    bodyHTML = `<p class="text-xs text-slate-600 leading-relaxed line-clamp-3 break-all whitespace-pre-wrap">${escapeHTML(item.text)}</p>`;
+                    bodyHTML = `
+                        <div class="flex-1 my-1 overflow-hidden relative">
+                            <p class="text-xs text-on-surface-variant leading-relaxed line-clamp-4 whitespace-pre-wrap">${escapeHTML(item.text)}</p>
+                            <div class="absolute bottom-0 left-0 w-full h-4 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+                        </div>
+                    `;
                 } else {
-                    bodyHTML = `<p class="text-xs text-slate-400 italic">空白插槽 (點擊編輯或雙擊貼上)</p>`;
+                    bodyHTML = `
+                        <div class="flex-1 my-1 rounded-xl border border-dashed border-outline-variant/60 flex flex-col items-center justify-center text-outline-variant">
+                            <span class="material-symbols-outlined text-2xl mb-1">add_circle_outline</span>
+                            <p class="text-xs italic font-medium">空白插槽 (點擊編輯或雙擊貼上)</p>
+                        </div>
+                    `;
                 }
+
+                const titleHTML = hasTitle 
+                    ? `<h4 class="font-bold text-sm text-on-surface truncate">${escapeHTML(item.title)}</h4>` 
+                    : `<h4 class="font-bold text-xs text-outline-variant/80 truncate">插槽 #${index + 1}</h4>`;
 
                 if (isEditMode) {
                     card.innerHTML = `
-                        <div class="flex-shrink-0 w-7 h-7 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-bold text-xs">${index + 1}</div>
-                        <div class="flex-1 min-w-0 cursor-pointer" onclick="actionEditSlot(${index})">
+                        <div class="flex justify-between items-center pb-1 border-b border-surface-container">
                             ${titleHTML}
-                            ${bodyHTML}
-                            <p class="text-[10px] text-brand-600 font-medium mt-1.5 flex items-center">✏️ 點擊修改卡片</p>
+                            <button onclick="actionDeleteSlot(${index})" aria-label="刪除" class="text-error p-1 hover:bg-error/10 rounded-lg">
+                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
                         </div>
-                        <button onclick="actionDeleteSlot(${index})" aria-label="刪除插槽" class="flex-shrink-0 p-2 text-rose-500 hover:bg-rose-50 rounded-xl active:scale-90 transition-transform">🗑️</button>
+                        ${bodyHTML}
+                        <div class="pt-1 border-t border-surface-container flex justify-between items-center text-[10px] text-primary font-bold" onclick="actionEditSlot(${index})">
+                            <span class="flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">edit</span> 編輯卡片</span>
+                            <span class="text-outline-variant font-normal">#${index + 1}</span>
+                        </div>
                     `;
                 } else {
                     card.innerHTML = `
-                        <div class="flex-shrink-0 w-7 h-7 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center font-bold text-xs">${index + 1}</div>
-                        <div class="flex-1 min-w-0 pointer-events-none">
+                        <div class="flex justify-between items-center pb-1 border-b border-surface-container pointer-events-none">
                             ${titleHTML}
-                            ${bodyHTML}
+                            <span class="text-[10px] font-bold text-primary bg-primary-container/50 px-2 py-0.5 rounded-md">#${index + 1}</span>
                         </div>
+                        <div class="pointer-events-none flex-1 flex flex-col">${bodyHTML}</div>
                     `;
                     attachSlotInteractions(card, index);
                 }
@@ -584,6 +642,9 @@
             }
         }
 
+        // ==========================================
+        // 5. 插槽手勢 (左滑刪除、雙擊貼上、單擊複製)
+        // ==========================================
         function attachSlotInteractions(element, index) {
             let startX = 0;
             let startY = 0;
@@ -607,13 +668,11 @@
                 const deltaX = e.touches[0].clientX - startX;
                 const deltaY = e.touches[0].clientY - startY;
 
-                // 若縱向滾動大於橫向滑動，視為頁面滾動
                 if (Math.abs(deltaY) > Math.abs(deltaX) && !isSwiping) {
                     isScrolled = true;
                     return;
                 }
 
-                // 判斷是否為主要左滑手勢
                 if (Math.abs(deltaX) > 10 && deltaX < 0) {
                     isSwiping = true;
                     currentX = deltaX;
@@ -633,10 +692,9 @@
                     } else {
                         element.style.transform = 'translateX(0px)';
                     }
-                    return; // 重要：滑動觸發後，中斷後續的點擊/雙擊邏輯
+                    return;
                 }
 
-                // 非滑動、非頁面滾動情況下，觸發點擊/雙擊判斷
                 if (!isScrolled) {
                     e.preventDefault();
                     const currentTime = new Date().getTime();
@@ -654,7 +712,6 @@
                 }
             });
 
-            // 滑鼠相容點擊監聽 (桌面端開發或測試)
             element.addEventListener('click', (e) => {
                 if (e.pointerType === 'mouse' && !isEditMode) {
                     const currentTime = new Date().getTime();
@@ -673,6 +730,7 @@
             });
         }
 
+        // 分類排序拖曳事件
         let draggedIdx = null;
         function attachDragEvents(element, index) {
             const handle = element.querySelector('.drag-handle');
@@ -696,6 +754,7 @@
                         draggedIdx = targetIdx;
                         saveData();
                         renderSlots();
+                        renderHeaderAndTabs();
                     }
                 }
             });
@@ -713,60 +772,189 @@
             handle.addEventListener('pointercancel', endDrag);
         }
 
-        function renderFAB() {
-            const menu = document.getElementById('fab-menu');
-            const mainFab = document.getElementById('main-fab');
-            menu.innerHTML = '';
-            
-            mainFab.innerText = themesData[currentThemeId] ? themesData[currentThemeId].icon : '📂';
-            mainFab.style.display = isEditMode ? 'none' : 'flex';
-
-            themeOrder.forEach(key => {
-                if (key !== currentThemeId && themesData[key]) {
-                    const t = themesData[key];
-                    menu.innerHTML += `
-                        <button onclick="switchTheme('${key}')" class="flex items-center space-x-2 bg-white px-4 py-2.5 rounded-2xl shadow-md border border-slate-100 active:scale-95 transition-transform">
-                            <span class="text-sm">${escapeHTML(t.icon)}</span>
-                            <span class="text-xs font-semibold text-slate-700">${escapeHTML(t.name)}</span>
-                        </button>
-                    `;
-                }
-            });
-
-            menu.innerHTML += `
-                <button onclick="actionAddTheme()" class="flex items-center space-x-2 bg-brand-50 border border-brand-200 px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform text-brand-600 font-bold">
-                    <span class="text-sm">➕</span>
-                    <span class="text-xs">新增類別</span>
-                </button>
-            `;
+        // ==========================================
+        // 6. 剪貼簿邏輯 (複製/貼上/智能點擊)
+        // ==========================================
+        function switchTheme(themeKey) {
+            if (!themesData[themeKey]) return;
+            currentThemeId = themeKey;
+            saveData();
+            renderAll();
         }
 
+        async function smartAddAction() {
+            const slots = clipboardData[currentThemeId];
+            let targetIdx = slots.findIndex(s => !s.text && !s.imageId);
+            if (targetIdx === -1) targetIdx = slots.length - 1;
+
+            const slotCard = document.querySelectorAll('.slot-card')[targetIdx];
+            await handlePaste(slotCard, targetIdx);
+        }
+
+        async function handleCardClick(element, index) {
+            const item = clipboardData[currentThemeId][index];
+            const isUrl = item.type === 'url' || isValidURL(item.text);
+
+            if (isUrl && item.text.trim()) {
+                const targetUrl = item.text.trim();
+                openModal({
+                    type: 'confirm',
+                    title: '🔗 前往外部連結',
+                    message: `是否要開啟新分頁前往以下網址？\n\n${targetUrl}`,
+                    confirmText: '開啟連結',
+                    onConfirm: () => {
+                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                    }
+                });
+                return;
+            }
+
+            if (item.type === 'image' && item.imageId) {
+                const blob = await getImageBlob(item.imageId);
+                if (blob && navigator.clipboard && window.ClipboardItem) {
+                    try {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ [blob.type]: blob })
+                        ]);
+                        triggerFlash(element);
+                        showToast('已複製圖片至剪貼簿!', 'image');
+                        return;
+                    } catch (err) {}
+                }
+                showToast('圖片已儲存於裝置中', 'info');
+                return;
+            }
+
+            handleCopyText(element, item.text);
+        }
+
+        async function handleCopyText(element, textToCopy) {
+            if (!textToCopy) return showToast('插槽內容為空', 'warning');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = textToCopy;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                }
+                triggerFlash(element);
+                showToast('已複製!', 'check_circle');
+            } catch (err) {
+                showToast('複製失敗', 'error');
+            }
+        }
+
+        async function handlePaste(element, index) {
+            try {
+                if (!navigator.clipboard) throw new Error("不支援 API");
+
+                if (navigator.clipboard.read) {
+                    const items = await navigator.clipboard.read();
+                    for (const item of items) {
+                        const imageType = item.types.find(type => type.startsWith('image/'));
+                        if (imageType) {
+                            const blob = await item.getType(imageType);
+                            const previewUrl = URL.createObjectURL(blob);
+                            openModal({
+                                type: 'confirm',
+                                title: `📋 貼上圖片至插槽 #${index + 1}`,
+                                message: `偵測到剪貼簿中有圖片，是否確定貼上？`,
+                                confirmText: '確定貼上',
+                                currentImgUrl: previewUrl,
+                                onConfirm: async () => {
+                                    await processPastedImageBlob(element, index, blob);
+                                }
+                            });
+                            return;
+                        }
+                    }
+                }
+
+                if (navigator.clipboard.readText) {
+                    const pastedText = await navigator.clipboard.readText();
+                    if (pastedText && pastedText.trim()) {
+                        const previewText = pastedText.length > 80 ? pastedText.substring(0, 80) + '...' : pastedText;
+                        openModal({
+                            type: 'confirm',
+                            title: `📋 貼上內容至插槽 #${index + 1}`,
+                            message: `偵測到剪貼簿內容：\n\n「${previewText}」\n\n是否確定貼上？`,
+                            confirmText: '確定貼上',
+                            onConfirm: async () => {
+                                await processPastedText(element, index, pastedText.trim());
+                            }
+                        });
+                        return;
+                    }
+                }
+
+                showToast('剪貼簿無可讀取內容', 'warning');
+            } catch (err) {
+                actionEditSlot(index);
+            }
+        }
+
+        async function processPastedImageBlob(element, index, blob) {
+            const item = clipboardData[currentThemeId][index];
+            if (item.imageId) await deleteImageBlob(item.imageId);
+
+            const newImgId = 'img_' + generateId();
+            await saveImageBlob(newImgId, blob);
+
+            item.imageId = newImgId;
+            item.type = 'image';
+            if (!item.title) item.title = '已貼上圖片';
+
+            saveData();
+            triggerFlash(element);
+            renderSlots();
+            showToast('已貼上圖片!', 'image');
+        }
+
+        async function processPastedText(element, index, text) {
+            const item = clipboardData[currentThemeId][index];
+            item.text = text;
+            if (!item.imageId) {
+                item.type = isValidURL(text) ? 'url' : 'text';
+            }
+            saveData();
+            triggerFlash(element);
+            renderSlots();
+            showToast('已貼上內容!', 'check_circle');
+        }
+
+        // ==========================================
+        // 7. 分類與插槽編輯動作
+        // ==========================================
         function actionAddTheme() {
             openModal({
                 type: 'double-prompt',
-                title: '➕ 新增主題類別',
-                placeholder1: '名稱 (例：旅行清單)',
+                title: '➕ 新增主題分類',
+                placeholder1: '分類名稱 (例：旅行清單)',
                 placeholder2: '圖示 Emoji (例：✈️)',
                 onConfirm: ({ title, val2 }) => {
                     if (!title) return;
                     const finalIcon = val2 || '📂';
                     const newId = generateId();
                     themesData[newId] = { name: title, icon: finalIcon };
-                    clipboardData[newId] = Array.from({length: 5}, () => ({ title: '', text: '', type: 'text', imageId: null }));
+                    clipboardData[newId] = Array.from({length: 4}, () => ({ title: '', text: '', type: 'text', imageId: null }));
                     themeOrder.push(newId);
                     currentThemeId = newId;
                     saveData();
                     renderAll();
-                    showToast('已新增主題類別', '✅');
+                    showToast('已新增分類', 'check_circle');
                 }
             });
         }
 
-        function actionEditThemeName() {
-            const current = themesData[currentThemeId];
+        function actionEditThemeName(targetThemeId = currentThemeId) {
+            const current = themesData[targetThemeId];
             openModal({
                 type: 'double-prompt',
-                title: '✏️ 修改主題類別',
+                title: '✏️ 修改分類設定',
                 value1: current.name,
                 placeholder1: '名稱',
                 value2: current.icon,
@@ -777,29 +965,29 @@
                     current.icon = val2 || current.icon;
                     saveData();
                     renderAll();
-                    showToast('已更新主題類別', '✅');
+                    showToast('已更新分類', 'check_circle');
                 }
             });
         }
 
-        function actionDeleteTheme() {
+        function actionDeleteTheme(targetThemeId = currentThemeId) {
             openModal({
                 type: 'confirm',
-                title: '🗑️ 刪除主題類別',
-                message: `確定要刪除「${themesData[currentThemeId].name}」以及該類別內的所有剪貼內容嗎？`,
+                title: '🗑️ 刪除分類',
+                message: `確定要刪除「${themesData[targetThemeId].name}」以及其中的所有內容嗎？`,
                 confirmText: '確定刪除',
                 onConfirm: async () => {
-                    const slots = clipboardData[currentThemeId] || [];
+                    const slots = clipboardData[targetThemeId] || [];
                     for (const s of slots) {
                         if (s.imageId) await deleteImageBlob(s.imageId);
                     }
-                    delete themesData[currentThemeId];
-                    delete clipboardData[currentThemeId];
-                    themeOrder = themeOrder.filter(id => id !== currentThemeId);
+                    delete themesData[targetThemeId];
+                    delete clipboardData[targetThemeId];
+                    themeOrder = themeOrder.filter(id => id !== targetThemeId);
                     currentThemeId = themeOrder[0];
                     saveData();
                     renderAll();
-                    showToast('已刪除', '🗑️');
+                    showToast('已刪除分類', 'delete');
                 }
             });
         }
@@ -841,7 +1029,7 @@
 
                     saveData();
                     renderSlots();
-                    showToast('已儲存變更', '✅');
+                    showToast('已儲存變更', 'check_circle');
                 }
             });
         }
@@ -858,165 +1046,33 @@
                     clipboardData[currentThemeId].splice(index, 1);
                     saveData();
                     renderSlots();
-                    showToast('已移除插槽', '🗑️');
+                    showToast('已移除插槽', 'delete');
                 }
             });
         }
 
-        function switchTheme(themeKey) {
-            if (!themesData[themeKey]) return;
-            currentThemeId = themeKey;
-            saveData();
-            toggleFAB(false);
-            renderAll();
+        function triggerFlash(element) {
+            if (!element) return;
+            element.classList.remove('slot-flash');
+            void element.offsetWidth;
+            element.classList.add('slot-flash');
         }
 
-        async function handleCardClick(element, index) {
-            const item = clipboardData[currentThemeId][index];
-            const isUrl = item.type === 'url' || isValidURL(item.text);
-
-            if (isUrl && item.text.trim()) {
-                const targetUrl = item.text.trim();
-                openModal({
-                    type: 'confirm',
-                    title: '🔗 前往外部連結',
-                    message: `是否要開啟新分頁前往以下網址？\n\n${targetUrl}`,
-                    confirmText: '開啟連結',
-                    onConfirm: () => {
-                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-                    }
-                });
-                return;
-            }
-
-            if (item.type === 'image' && item.imageId) {
-                const blob = await getImageBlob(item.imageId);
-                if (blob && navigator.clipboard && window.ClipboardItem) {
-                    try {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ [blob.type]: blob })
-                        ]);
-                        triggerFlash(element);
-                        showToast('已複製圖片至剪貼簿!', '🖼️');
-                        return;
-                    } catch (err) {}
-                }
-                showToast('圖片已儲存於裝置中', 'ℹ️');
-                return;
-            }
-
-            handleCopyText(element, item.text);
+        let toastTimeout;
+        function showToast(msg, icon = 'check_circle') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').innerText = icon;
+            toast.classList.remove('hidden');
+            toast.classList.add('flex');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.remove('flex');
+            }, 2200);
         }
 
-        async function handleCopyText(element, textToCopy) {
-            if (!textToCopy) return showToast('插槽內容為空', '⚠️');
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(textToCopy);
-                } else {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = textToCopy;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand("copy");
-                    document.body.removeChild(textArea);
-                }
-                triggerFlash(element);
-                showToast('已複製!', '✅');
-            } catch (err) {
-                showToast('複製失敗', '❌');
-            }
-        }
-
-        async function handlePaste(element, index) {
-            try {
-                if (!navigator.clipboard) throw new Error("不支援 API");
-
-                if (navigator.clipboard.read) {
-                    const items = await navigator.clipboard.read();
-                    for (const item of items) {
-                        const imageType = item.types.find(type => type.startsWith('image/'));
-                        if (imageType) {
-                            const blob = await item.getType(imageType);
-                            const previewUrl = URL.createObjectURL(blob);
-                            openModal({
-                                type: 'confirm',
-                                title: `📋 貼上圖片至插槽 #${index + 1}`,
-                                message: `偵測到剪貼簿中有圖片，是否確定貼上並覆蓋第 ${index + 1} 格內容？`,
-                                confirmText: '確定貼上',
-                                currentImgUrl: previewUrl,
-                                onConfirm: async () => {
-                                    await processPastedImageBlob(element, index, blob);
-                                }
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                if (navigator.clipboard.readText) {
-                    const pastedText = await navigator.clipboard.readText();
-                    if (pastedText && pastedText.trim()) {
-                        const previewText = pastedText.length > 100 ? pastedText.substring(0, 100) + '...' : pastedText;
-                        openModal({
-                            type: 'confirm',
-                            title: `📋 貼上內容至插槽 #${index + 1}`,
-                            message: `偵測到剪貼簿內容：\n\n「${previewText}」\n\n是否確定貼上至第 ${index + 1} 格？`,
-                            confirmText: '確定貼上',
-                            onConfirm: async () => {
-                                await processPastedText(element, index, pastedText.trim());
-                            }
-                        });
-                        return;
-                    }
-                }
-
-                showToast('剪貼簿無可讀取內容', '⚠️');
-            } catch (err) {
-                openModal({
-                    type: 'slot-edit',
-                    title: `📋 貼上內容至插槽 #${index + 1}`,
-                    textValue: clipboardData[currentThemeId][index].text || '',
-                    onConfirm: async ({ text, pendingBlob }) => {
-                        if (pendingBlob) {
-                            await processPastedImageBlob(element, index, pendingBlob);
-                        } else if (text) {
-                            await processPastedText(element, index, text);
-                        }
-                    }
-                });
-            }
-        }
-
-        async function processPastedImageBlob(element, index, blob) {
-            const item = clipboardData[currentThemeId][index];
-            if (item.imageId) await deleteImageBlob(item.imageId);
-
-            const newImgId = 'img_' + generateId();
-            await saveImageBlob(newImgId, blob);
-
-            item.imageId = newImgId;
-            item.type = 'image';
-            if (!item.title) item.title = '已貼上圖片';
-
-            saveData();
-            triggerFlash(element);
-            renderSlots();
-            showToast('已貼上圖片!', '🖼️');
-        }
-
-        async function processPastedText(element, index, text) {
-            const item = clipboardData[currentThemeId][index];
-            item.text = text;
-            if (!item.imageId) {
-                item.type = isValidURL(text) ? 'url' : 'text';
-            }
-            saveData();
-            triggerFlash(element);
-            renderSlots();
-            showToast('已貼上內容!', '✅');
-        }
-
+        // 監聽全域貼上事件
         document.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (const item of items) {
@@ -1032,7 +1088,7 @@
                         openModal({
                             type: 'confirm',
                             title: `📋 貼上圖片至插槽 #${targetIdx + 1}`,
-                            message: `偵測到剪貼簿圖片，是否貼上至第 ${targetIdx + 1} 格？`,
+                            message: `偵測到剪貼簿圖片，是否貼上？`,
                             confirmText: '確定貼上',
                             currentImgUrl: previewUrl,
                             onConfirm: async () => {
@@ -1043,44 +1099,6 @@
                     }
                 }
             }
-        });
-
-        function triggerFlash(element) {
-            if (!element) return;
-            element.classList.remove('slot-flash');
-            void element.offsetWidth;
-            element.classList.add('slot-flash');
-        }
-
-        let toastTimeout;
-        function showToast(msg, icon) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = msg;
-            document.getElementById('toast-icon').innerText = icon;
-            toast.classList.add('show');
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => toast.classList.remove('show'), 2200);
-        }
-
-        function toggleFAB(forceState) {
-            const menu = document.getElementById('fab-menu');
-            if (forceState !== undefined) {
-                forceState ? menu.classList.add('active') : menu.classList.remove('active');
-            } else {
-                menu.classList.toggle('active');
-            }
-        }
-
-        document.getElementById('main-fab').addEventListener('click', (e) => {
-            e.stopPropagation(); 
-            toggleFAB();
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
-        });
-        document.addEventListener('touchend', (e) => {
-             if (!e.target.closest('.fixed.bottom-6') && !isEditMode) toggleFAB(false);
         });
 
         function registerServiceWorker() {
