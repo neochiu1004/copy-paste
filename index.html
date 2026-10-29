@@ -2,7 +2,7 @@
 <html class="light" lang="zh-TW">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
     <title>ClipFlow - 極速剪貼 PWA</title>
     
     <!-- iOS PWA Settings -->
@@ -10,79 +10,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ClipFlow">
     <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="ClipFlow 極速剪貼：單擊複製、雙擊貼上、左滑刪除的本機剪貼插槽工具，資料只存在你的裝置上。">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 
     <!-- Fonts & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Quicksand:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script id="tailwind-config">
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#00658d",
-                        "primary-container": "#c6e7ff",
-                        "on-primary-container": "#001e2d",
-                        "surface": "#f8f9ff",
-                        "surface-container-lowest": "#ffffff",
-                        "surface-container-low": "#eff4ff",
-                        "surface-container": "#e6eeff",
-                        "surface-container-high": "#dce9ff",
-                        "on-surface": "#0d1c2e",
-                        "on-surface-variant": "#3e4850",
-                        "outline": "#6e7881",
-                        "outline-variant": "#bdc8d1",
-                        "secondary": "#4f616a",
-                        "secondary-container": "#cfe3ee",
-                        "tertiary": "#725c00",
-                        "tertiary-container": "#ffe07c",
-                        "error": "#ba1a1a"
-                    },
-                    fontFamily: {
-                        "body-md": ["Noto Sans TC", "Plus Jakarta Sans", "sans-serif"],
-                        "headline-md": ["Noto Sans TC", "Quicksand", "sans-serif"],
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { 
-            background-color: #f8f9ff; 
-            -webkit-tap-highlight-color: transparent; 
-            overscroll-behavior-y: none;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        .ambient-shadow { box-shadow: 0px 4px 12px rgba(0, 101, 141, 0.08); }
-        .ambient-shadow-high { box-shadow: 0px 12px 24px rgba(0, 101, 141, 0.18); }
-        
-        /* 複製閃爍與滑動手勢過場動畫 */
-        .slot-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease; }
-        .slot-card:active { transform: scale(0.98); }
-        .slot-flash { animation: flash-cyan 0.5s ease-out; }
-        @keyframes flash-cyan {
-            0% { background-color: rgba(198, 231, 255, 0.8); }
-            100% { background-color: #ffffff; }
-        }
-
-        .swiping { transition: none !important; }
-        .swipe-removed { transform: translateX(-100%) !important; opacity: 0; transition: all 0.25s ease-out !important; }
-
-        @keyframes slideUpFade {
-            0% { opacity: 0; transform: translate(-50%, 20px); }
-            10% { opacity: 1; transform: translate(-50%, 0); }
-            90% { opacity: 1; transform: translate(-50%, 0); }
-            100% { opacity: 0; transform: translate(-50%, -20px); }
-        }
-        .toast-animate { animation: slideUpFade 2.2s ease-in-out forwards; }
-    </style>
+    <!-- Tailwind CSS (prebuilt; rebuild: npx tailwindcss -c tailwind.config.js -i src.css -o app.css --minify) -->
+    <link rel="stylesheet" href="./app.css">
 </head>
 <body class="bg-surface text-on-surface font-body-md h-[100dvh] w-full flex flex-col overflow-hidden antialiased">
 
@@ -132,6 +72,21 @@
                 </button>
             </div>
             <div id="theme-sort-list" class="space-y-2"></div>
+            <div class="mt-4 pt-3 border-t border-surface-container">
+                <h3 class="text-xs font-bold tracking-wider text-primary uppercase flex items-center gap-1 mb-2">
+                    <span class="material-symbols-outlined text-[18px]">backup</span>
+                    資料備份（只存本機，建議定期匯出）
+                </h3>
+                <div class="flex gap-2">
+                    <button id="export-btn" class="px-3.5 py-1.5 rounded-lg bg-primary-container text-on-primary-container text-xs font-bold hover:bg-primary-container/80 transition-colors flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">download</span> 匯出備份
+                    </button>
+                    <button id="import-btn" class="px-3.5 py-1.5 rounded-lg bg-surface-container-low text-on-surface-variant text-xs font-bold hover:bg-surface-container border border-outline-variant/40 transition-colors flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">upload</span> 匯入備份
+                    </button>
+                    <input type="file" id="import-file-input" accept="application/json,.json" class="hidden">
+                </div>
+            </div>
         </div>
 
         <!-- 剪貼卡片網格 -->
@@ -556,7 +511,7 @@
                 if (isImage) {
                     bodyHTML = `
                         <div class="flex-1 w-full relative rounded-xl overflow-hidden bg-surface-container my-1.5 border border-outline-variant/30 flex items-center justify-center min-h-[7.5rem]">
-                            <img id="slot-img-${index}" src="" class="w-full h-full object-cover" alt="插槽圖片">
+                            <img id="slot-img-${index}" data-image-id="${item.imageId ? item.imageId : ''}" src="" class="w-full h-full object-cover" alt="插槽圖片">
                             <div class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm flex items-center gap-1 font-bold">
                                 <span class="material-symbols-outlined text-[14px]">image</span> 圖片
                             </div>
@@ -637,7 +592,7 @@
                 }
             }
             const imgEl = document.getElementById(`slot-img-${index}`);
-            if (imgEl && srcUrl) {
+            if (imgEl && srcUrl && imgEl.dataset.imageId === imageId) {
                 imgEl.src = srcUrl;
             }
         }
@@ -696,6 +651,7 @@
                 }
 
                 if (!isScrolled) {
+                    lastTouchEndAt = Date.now();
                     e.preventDefault();
                     const currentTime = new Date().getTime();
                     const tapLength = currentTime - lastTapTime;
@@ -713,7 +669,7 @@
             });
 
             element.addEventListener('click', (e) => {
-                if (e.pointerType === 'mouse' && !isEditMode) {
+                if (!isEditMode && Date.now() - lastTouchEndAt > 600) {
                     const currentTime = new Date().getTime();
                     const tapLength = currentTime - lastTapTime;
 
@@ -731,6 +687,7 @@
         }
 
         // 分類排序拖曳事件
+        let lastTouchEndAt = 0;
         let draggedIdx = null;
         function attachDragEvents(element, index) {
             const handle = element.querySelector('.drag-handle');
@@ -813,15 +770,17 @@
                 const blob = await getImageBlob(item.imageId);
                 if (blob && navigator.clipboard && window.ClipboardItem) {
                     try {
+                        // Safari's clipboard only accepts image/png.
+                        const pngBlob = blob.type === 'image/png' ? blob : await convertBlobToPng(blob);
                         await navigator.clipboard.write([
-                            new ClipboardItem({ [blob.type]: blob })
+                            new ClipboardItem({ 'image/png': pngBlob })
                         ]);
                         triggerFlash(element);
                         showToast('已複製圖片至剪貼簿!', 'image');
                         return;
                     } catch (err) {}
                 }
-                showToast('圖片已儲存於裝置中', 'info');
+                showToast('此瀏覽器不支援直接複製圖片', 'info');
                 return;
             }
 
@@ -1072,6 +1031,96 @@
             }, 2200);
         }
 
+        async function convertBlobToPng(blob) {
+            const bitmap = await createImageBitmap(blob);
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            canvas.getContext('2d').drawImage(bitmap, 0, 0);
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((b) => b ? resolve(b) : reject(new Error('PNG 轉換失敗')), 'image/png');
+            });
+        }
+
+        // ==========================================
+        // 8. 備份匯出 / 匯入（JSON，圖片以 base64 一併打包）
+        // ==========================================
+        const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        const dataUrlToBlob = async (dataUrl) => (await fetch(dataUrl)).blob();
+
+        async function exportBackup() {
+            try {
+                const imageIds = new Set();
+                Object.values(clipboardData).forEach((slots) => {
+                    (slots || []).forEach((slot) => { if (slot.imageId) imageIds.add(slot.imageId); });
+                });
+                const images = {};
+                for (const id of imageIds) {
+                    const blob = await getImageBlob(id);
+                    if (blob) images[id] = await blobToDataUrl(blob);
+                }
+                const payload = {
+                    app: 'ClipFlow',
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    themes: themesData,
+                    clips: clipboardData,
+                    order: themeOrder,
+                    images,
+                };
+                const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `clipflow-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 4000);
+                showToast('已匯出備份', 'download');
+            } catch (err) {
+                showToast('匯出失敗', 'error');
+            }
+        }
+
+        async function importBackup(file) {
+            try {
+                const payload = JSON.parse(await file.text());
+                if (payload.app !== 'ClipFlow' || !payload.themes || !payload.clips) {
+                    throw new Error('格式不符');
+                }
+                openModal({
+                    type: 'confirm',
+                    title: '📥 匯入備份',
+                    message: '匯入將覆蓋目前的全部資料，確定要繼續嗎？',
+                    confirmText: '確定匯入',
+                    onConfirm: async () => {
+                        for (const [id, dataUrl] of Object.entries(payload.images || {})) {
+                            await saveImageBlob(id, await dataUrlToBlob(dataUrl));
+                        }
+                        themesData = payload.themes;
+                        clipboardData = payload.clips;
+                        themeOrder = Array.isArray(payload.order) && payload.order.length
+                            ? payload.order.filter((id) => themesData[id])
+                            : Object.keys(themesData);
+                        currentThemeId = themeOrder[0];
+                        imageUrlCache.clear();
+                        saveData();
+                        renderAll();
+                        showToast('已匯入備份', 'upload');
+                    }
+                });
+            } catch (err) {
+                showToast('匯入失敗：檔案格式不正確', 'error');
+            }
+        }
+
         // 監聽全域貼上事件
         document.addEventListener('paste', async (e) => {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -1108,7 +1157,18 @@
         }
 
         window.addEventListener('offline', () => document.getElementById('offline-badge').classList.remove('hidden'));
-        window.addEventListener('online', () => document.getElementById('offline-badge').classList.hidden = true);
+        window.addEventListener('online', () => document.getElementById('offline-badge').classList.add('hidden'));
+
+        document.getElementById('export-btn')?.addEventListener('click', exportBackup);
+        document.getElementById('import-btn')?.addEventListener('click', () => document.getElementById('import-file-input')?.click());
+        document.getElementById('import-file-input')?.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) importBackup(file);
+            e.target.value = '';
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modalEl.classList.contains('hidden')) closeModal();
+        });
 
         window.addEventListener('DOMContentLoaded', () => {
             initData();
